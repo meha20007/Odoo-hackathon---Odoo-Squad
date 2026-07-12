@@ -329,7 +329,7 @@ def create_trip():
 
     # Check vehicle existence and status
     vehicle = db.vehicles.find_one({"_id": ObjectId(vehicle_id)}) if db.vehicles else None
-    if vehicle and vehicle.get("status") != "active":
+    if vehicle and vehicle.get("status") not in ("Available", "On Trip"):
         return jsonify({"error": f"Vehicle is currently in state '{vehicle.get('status')}' and cannot be booked."}), 400
 
     # Schedule overlap checking for vehicle
@@ -403,7 +403,7 @@ def update_trip_status(trip_id):
 
 
 @trip_bp.route("/<trip_id>", methods=["DELETE"])
-@role_required("admin")
+@role_required("Fleet Manager")
 def delete_trip(trip_id):
     """Deletes a trip from records (Admin only)."""
     trip = db_trip_helper.find_by_id(trip_id)

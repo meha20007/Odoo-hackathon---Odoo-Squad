@@ -6,28 +6,21 @@ import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Progress } from "@/components/ui/progress";
 import { Search, Plus, Download, Star, Phone, ShieldCheck, Award, Calendar, Filter } from "lucide-react";
-import { drivers, type DriverStatus } from "@/lib/mock-data";
+import { useDrivers } from "@/hooks/use-api-data";
+import { driverStatusTone, initials } from "@/lib/transitops-api";
 
 export const Route = createFileRoute("/_app/drivers")({
   component: DriversPage,
   head: () => ({ meta: [{ title: "Driver & Safety — TransitOps" }] }),
 });
 
-const statusTone: Record<DriverStatus, "success" | "primary" | "muted" | "warning"> = {
-  available: "success",
-  "on-duty": "primary",
-  "off-duty": "muted",
-  "on-leave": "warning",
-};
-
-const statusLabel: Record<DriverStatus, string> = {
-  available: "Available",
-  "on-duty": "On Duty",
-  "off-duty": "Off Duty",
-  "on-leave": "On Leave",
-};
-
 function DriversPage() {
+  const { data: drivers = [], isLoading } = useDrivers();
+
+  if (isLoading) {
+    return <div className="py-20 text-center text-muted-foreground">Loading drivers…</div>;
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -62,66 +55,64 @@ function DriversPage() {
               <div className="flex items-start gap-4">
                 <Avatar className="h-14 w-14 ring-2 ring-primary/20">
                   <AvatarFallback className="bg-primary/10 text-base font-semibold text-primary">
-                    {d.photo}
+                    {initials(d.name)}
                   </AvatarFallback>
                 </Avatar>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between">
                     <h3 className="truncate text-base font-semibold">{d.name}</h3>
-                    <StatusPill tone={statusTone[d.status]}>{statusLabel[d.status]}</StatusPill>
+                    <StatusPill tone={driverStatusTone(d.status)}>{d.status}</StatusPill>
                   </div>
                   <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
-                    <span>{d.id}</span>
+                    <span>{d.license_number}</span>
                     <span>·</span>
-                    <span>{d.experience} yrs exp.</span>
+                    <span>{d.license_category}</span>
                   </div>
                   <div className="mt-2 flex items-center gap-1">
                     {Array.from({ length: 5 }).map((_, i) => (
                       <Star
                         key={i}
-                        className={`h-3.5 w-3.5 ${
-                          i < Math.round(d.safetyRating) ? "fill-primary text-primary" : "text-border"
-                        }`}
+                        className={`h-3.5 w-3.5 ${i < Math.round(d.safety_score / 20) ? "fill-warning text-warning" : "text-border"}`}
                       />
                     ))}
-                    <span className="ml-1 text-xs font-medium">{d.safetyRating.toFixed(1)}</span>
+                    <span className="ml-1 text-xs font-medium">{d.safety_score}/100</span>
                   </div>
                 </div>
               </div>
 
-              <div className="mt-4 space-y-2 text-sm">
-                <Row icon={ShieldCheck} label="License" value={`${d.license.slice(0, 6)}··· · exp ${d.licenseExpiry}`} />
-                <Row icon={Phone} label="Contact" value={d.phone} />
-                <Row icon={Calendar} label="Vehicle" value={d.vehicle} />
-                <Row icon={Award} label="Trips completed" value={`${d.trips} trips · ${d.violations} violations`} />
+              <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
+                <div className="flex items-center gap-2 rounded-lg bg-secondary/70 px-3 py-2">
+                  <Phone className="h-3.5 w-3.5 text-muted-foreground" />
+                  {d.contact_number}
+                </div>
+                <div className="flex items-center gap-2 rounded-lg bg-secondary/70 px-3 py-2">
+                  <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                  Exp: {d.license_expiry}
+                </div>
+                <div className="flex items-center gap-2 rounded-lg bg-secondary/70 px-3 py-2">
+                  <ShieldCheck className="h-3.5 w-3.5 text-muted-foreground" />
+                  {d.license_valid === false ? "License expired" : "License valid"}
+                </div>
+                <div className="flex items-center gap-2 rounded-lg bg-secondary/70 px-3 py-2">
+                  <Award className="h-3.5 w-3.5 text-muted-foreground" />
+                  {d.assignable ? "Assignable" : "Not assignable"}
+                </div>
               </div>
 
               <div className="mt-4">
-                <div className="mb-1 flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground">Driving Score</span>
-                  <span className="font-semibold">{d.score}/100</span>
+                <div className="mb-1 flex justify-between text-xs">
+                  <span className="text-muted-foreground">Safety score</span>
+                  <span className="font-medium">{d.safety_score}%</span>
                 </div>
-                <Progress value={d.score} className="h-1.5" />
-              </div>
-
-              <div className="mt-4 flex gap-2">
-                <Button variant="outline" size="sm" className="flex-1 rounded-lg">View profile</Button>
-                <Button size="sm" className="flex-1 rounded-lg">Assign trip</Button>
+                <Progress value={d.safety_score} className="h-1.5" />
               </div>
             </CardContent>
           </Card>
         ))}
       </div>
-    </div>
-  );
-}
-
-function Row({ icon: Icon, label, value }: { icon: React.ComponentType<{ className?: string }>; label: string; value: string }) {
-  return (
-    <div className="flex items-center gap-2 text-xs">
-      <Icon className="h-3.5 w-3.5 text-muted-foreground" />
-      <span className="text-muted-foreground">{label}:</span>
-      <span className="ml-auto truncate font-medium">{value}</span>
+      {drivers.length === 0 && (
+        <p className="text-center text-sm text-muted-foreground">No drivers found. Run `python seed_data.py` on the backend.</p>
+      )}
     </div>
   );
 }
