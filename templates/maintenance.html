@@ -1,0 +1,324 @@
+{% extends "base.html" %}
+{% block title %}Maintenance — TransitOps{% endblock %}
+{% block page_title %}Maintenance{% endblock %}
+
+{% block extra_head %}
+<style>
+  .toolbar { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:20px; }
+  .filters { display:flex; gap:10px; flex-wrap:wrap; }
+  .filters select, .filters input {
+    font-family: var(--font-mono); font-size:.78rem;
+    border:1px solid var(--line); background:var(--paper-card); color:var(--ink);
+    border-radius: var(--radius); padding:7px 10px;
+  }
+  .btn {
+    font-family: var(--font-display); font-size:.85rem; letter-spacing:.02em;
+    border:none; border-radius: var(--radius); padding:9px 16px; cursor:pointer;
+  }
+  .btn-primary { background: var(--graphite); color:#fff; }
+  .btn-primary:hover { background:#2a303a; }
+  .btn-ghost { background:transparent; border:1px solid var(--line); color:var(--ink-soft); }
+  .btn-ghost:hover { border-color: var(--signal-amber); color: var(--ink); }
+
+  table.data-table { width:100%; border-collapse:collapse; font-size:.86rem; }
+  table.data-table th {
+    font-family: var(--font-mono); font-size:.68rem; text-transform:uppercase; letter-spacing:.06em;
+    color: var(--ink-soft); text-align:left; padding:10px 14px; border-bottom:1px solid var(--line);
+  }
+  table.data-table td { padding:10px 14px; border-bottom:1px solid var(--line); vertical-align:middle; }
+  table.data-table tr:last-child td { border-bottom:none; }
+  table.data-table tr:hover td { background: rgba(240,166,58,.04); }
+  .row-actions { display:flex; gap:6px; flex-wrap:wrap; }
+  .icon-btn {
+    font-family: var(--font-mono); font-size:.72rem;
+    border:1px solid var(--line); background:var(--paper-card); color:var(--ink-soft);
+    border-radius: 4px; padding:4px 8px; cursor:pointer;
+  }
+  .icon-btn:hover { border-color: var(--signal-amber); color:var(--ink); }
+  .icon-btn.danger:hover { border-color: var(--status-bad); color: var(--status-bad); }
+  .icon-btn.good:hover { border-color: var(--status-good); color: var(--status-good); }
+
+  .empty-state, .loading-state { text-align:center; padding:40px 20px; color:var(--ink-soft); }
+  .loading-state { font-family:var(--font-mono); font-size:.8rem; }
+  .empty-state { font-size:.88rem; }
+
+  .modal-overlay {
+    position:fixed; inset:0; background:rgba(28,33,40,.5);
+    display:none; align-items:center; justify-content:center; z-index:100; padding:20px;
+  }
+  .modal-overlay.open { display:flex; }
+  .modal {
+    background:var(--paper-card); border-radius: var(--radius); border:1px solid var(--line);
+    width:100%; max-width:480px; max-height:90vh; overflow-y:auto;
+  }
+  .modal-head { display:flex; align-items:center; justify-content:space-between; padding:18px 22px; border-bottom:1px solid var(--line); }
+  .modal-head h2 { font-family:var(--font-display); font-size:1.05rem; font-weight:500; margin:0; }
+  .modal-close { background:none; border:none; font-size:1.1rem; color:var(--ink-soft); cursor:pointer; }
+  .modal-body { padding:20px 22px; }
+  .modal-foot { display:flex; justify-content:flex-end; gap:10px; padding:16px 22px; border-top:1px solid var(--line); }
+  .field { margin-bottom:14px; }
+  .field label {
+    font-family:var(--font-mono); font-size:.68rem; text-transform:uppercase; letter-spacing:.06em;
+    color:var(--ink-soft); display:block; margin-bottom:6px;
+  }
+  .field input, .field select, .field textarea {
+    width:100%; padding:9px 12px; border:1px solid var(--line); border-radius: var(--radius);
+    font-family:var(--font-body); font-size:.88rem; background:var(--paper-card); color:var(--ink);
+  }
+  .field textarea { resize:vertical; min-height:70px; }
+  .field input:focus, .field select:focus, .field textarea:focus { outline:2px solid var(--signal-amber); outline-offset:1px; border-color:var(--signal-amber); }
+  .modal-alert {
+    font-size:.82rem; padding:9px 12px; border-radius:var(--radius); border:1px solid var(--line);
+    border-left:3px solid var(--status-bad); margin-bottom:14px; display:none; background:var(--paper);
+  }
+  .card-table { overflow-x:auto; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="toolbar">
+  <div class="filters">
+    <select id="filterVehicle"><option value="">All vehicles</option></select>
+    <select id="filterStatus">
+      <option value="">All statuses</option>
+      <option value="Pending">Pending</option>
+      <option value="Completed">Completed</option>
+    </select>
+  </div>
+  <button class="btn btn-primary" id="openCreateBtn" style="display:none;">+ Add maintenance</button>
+</div>
+
+<div class="card card-table">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Vehicle</th>
+        <th>Description</th>
+        <th>Cost</th>
+        <th>Status</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody id="maintenanceRows">
+      <tr><td colspan="6"><div class="loading-state">Loading maintenance records…</div></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="modal-overlay" id="maintenanceModalOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <h2 id="modalTitle">Add maintenance record</h2>
+      <button class="modal-close" id="modalCloseBtn" type="button">&times;</button>
+    </div>
+    <form id="maintenanceForm">
+      <div class="modal-body">
+        <div class="modal-alert" id="modalAlert"></div>
+        <input type="hidden" id="maintenanceId">
+        <div class="field">
+          <label for="vehicle_id">Vehicle</label>
+          <select id="vehicle_id" required></select>
+        </div>
+        <div class="field">
+          <label for="maintenance_date">Date</label>
+          <input type="date" id="maintenance_date" required>
+        </div>
+        <div class="field">
+          <label for="description">Description</label>
+          <textarea id="description" required placeholder="e.g. Brake pad replacement"></textarea>
+        </div>
+        <div class="field">
+          <label for="cost">Cost</label>
+          <input type="number" id="cost" min="0" step="any" required>
+        </div>
+        <div class="field">
+          <label for="status">Status</label>
+          <select id="status">
+            <option value="Pending">Pending</option>
+            <option value="Completed">Completed</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn btn-ghost" id="cancelBtn">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="submitBtn">Save record</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const CURRENT_ROLE = "{{ session.get('user_role', '') }}";
+const CAN_WRITE = CURRENT_ROLE === "Fleet Manager";
+
+const STATUS_PILL = { "Pending": "pill-warn", "Completed": "pill-good" };
+
+let vehiclesById = {};
+
+const rowsEl = document.getElementById('maintenanceRows');
+const overlay = document.getElementById('maintenanceModalOverlay');
+const form = document.getElementById('maintenanceForm');
+const modalAlert = document.getElementById('modalAlert');
+const modalTitle = document.getElementById('modalTitle');
+const vehicleSelect = document.getElementById('vehicle_id');
+
+if (CAN_WRITE) document.getElementById('openCreateBtn').style.display = 'inline-block';
+
+document.getElementById('openCreateBtn').addEventListener('click', () => openModal());
+document.getElementById('modalCloseBtn').addEventListener('click', closeModal);
+document.getElementById('cancelBtn').addEventListener('click', closeModal);
+overlay.addEventListener('click', (e) => { if (e.target === overlay) closeModal(); });
+document.getElementById('filterVehicle').addEventListener('change', loadMaintenance);
+document.getElementById('filterStatus').addEventListener('change', loadMaintenance);
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str ?? '';
+  return div.innerHTML;
+}
+
+async function loadVehicles() {
+  const res = await fetch('/api/vehicles', { headers: { Accept: 'application/json' } });
+  const vehicles = await res.json();
+  vehiclesById = Object.fromEntries(vehicles.map(v => [v.id, v]));
+  const opts = vehicles.map(v => `<option value="${v.id}">${escapeHtml(v.registration_number)} — ${escapeHtml(v.vehicle_name)}</option>`).join('');
+  document.getElementById('filterVehicle').innerHTML = '<option value="">All vehicles</option>' + opts;
+  vehicleSelect.innerHTML = opts;
+}
+
+function openModal(record) {
+  form.reset();
+  modalAlert.style.display = 'none';
+  document.getElementById('maintenanceId').value = record ? record.id : '';
+  modalTitle.textContent = record ? 'Edit maintenance record' : 'Add maintenance record';
+  if (record) {
+    vehicleSelect.value = record.vehicle_id;
+    document.getElementById('maintenance_date').value = record.maintenance_date || '';
+    document.getElementById('description').value = record.description || '';
+    document.getElementById('cost').value = record.cost ?? '';
+    document.getElementById('status').value = record.status || 'Pending';
+  } else {
+    document.getElementById('status').value = 'Pending';
+  }
+  overlay.classList.add('open');
+}
+
+function closeModal() { overlay.classList.remove('open'); }
+
+async function loadMaintenance() {
+  rowsEl.innerHTML = '<tr><td colspan="6"><div class="loading-state">Loading maintenance records…</div></td></tr>';
+  const params = new URLSearchParams();
+  const vehicleId = document.getElementById('filterVehicle').value;
+  const status = document.getElementById('filterStatus').value;
+  if (vehicleId) params.set('vehicle_id', vehicleId);
+  if (status) params.set('status', status);
+
+  try {
+    const res = await fetch('/api/maintenance?' + params.toString(), { headers: { Accept: 'application/json' } });
+    const records = await res.json();
+    if (!Array.isArray(records) || records.length === 0) {
+      rowsEl.innerHTML = '<tr><td colspan="6"><div class="empty-state">No maintenance records found.</div></td></tr>';
+      return;
+    }
+    rowsEl.innerHTML = records.map(rowHtml).join('');
+    records.forEach(r => {
+      const editBtn = document.getElementById('edit-' + r.id);
+      const delBtn = document.getElementById('del-' + r.id);
+      const completeBtn = document.getElementById('complete-' + r.id);
+      if (editBtn) editBtn.addEventListener('click', () => openModal(r));
+      if (delBtn) delBtn.addEventListener('click', () => deleteRecord(r.id));
+      if (completeBtn) completeBtn.addEventListener('click', () => completeRecord(r.id));
+    });
+  } catch (err) {
+    rowsEl.innerHTML = '<tr><td colspan="6"><div class="empty-state">Could not load maintenance records.</div></td></tr>';
+  }
+}
+
+function rowHtml(r) {
+  const vehicle = vehiclesById[r.vehicle_id];
+  const pill = STATUS_PILL[r.status] || 'pill-neutral';
+  let actions = '';
+  if (CAN_WRITE) {
+    if (r.status === 'Pending') actions += `<button class="icon-btn good" id="complete-${r.id}" type="button">Complete</button>`;
+    actions += `<button class="icon-btn" id="edit-${r.id}" type="button">Edit</button>`;
+    actions += `<button class="icon-btn danger" id="del-${r.id}" type="button">Delete</button>`;
+  }
+  return `<tr>
+    <td>${escapeHtml(r.maintenance_date)}</td>
+    <td>${vehicle ? escapeHtml(vehicle.registration_number) : '—'}</td>
+    <td>${escapeHtml(r.description)}</td>
+    <td>${r.cost ?? ''}</td>
+    <td><span class="pill ${pill}">${escapeHtml(r.status)}</span></td>
+    <td><div class="row-actions">${actions}</div></td>
+  </tr>`;
+}
+
+async function deleteRecord(id) {
+  if (!confirm('Delete this maintenance record? This cannot be undone.')) return;
+  try {
+    const res = await fetch(`/api/maintenance/${id}`, { method: 'DELETE', headers: { Accept: 'application/json' } });
+    const data = await res.json();
+    if (!res.ok) { alert(data.error || 'Could not delete maintenance record.'); return; }
+    loadMaintenance();
+  } catch (err) {
+    alert('Network error while deleting maintenance record.');
+  }
+}
+
+async function completeRecord(id) {
+  if (!confirm('Mark this maintenance record as completed?')) return;
+  try {
+    const res = await fetch(`/api/maintenance/${id}/complete`, { method: 'POST', headers: { Accept: 'application/json' } });
+    const data = await res.json();
+    if (!res.ok) { alert(data.error || 'Could not complete maintenance record.'); return; }
+    loadMaintenance();
+  } catch (err) {
+    alert('Network error while completing maintenance record.');
+  }
+}
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  modalAlert.style.display = 'none';
+
+  const id = document.getElementById('maintenanceId').value;
+  const payload = {
+    vehicle_id: vehicleSelect.value,
+    maintenance_date: document.getElementById('maintenance_date').value,
+    description: document.getElementById('description').value.trim(),
+    cost: parseFloat(document.getElementById('cost').value),
+    status: document.getElementById('status').value,
+  };
+
+  const url = id ? `/api/maintenance/${id}` : '/api/maintenance';
+  const method = id ? 'PUT' : 'POST';
+
+  try {
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      modalAlert.textContent = data.error || 'Could not save maintenance record.';
+      modalAlert.style.display = 'block';
+      return;
+    }
+    closeModal();
+    loadMaintenance();
+  } catch (err) {
+    modalAlert.textContent = 'Network error while saving maintenance record.';
+    modalAlert.style.display = 'block';
+  }
+});
+
+(async function init() {
+  await loadVehicles();
+  loadMaintenance();
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,335 @@
+{% extends "base.html" %}
+{% block title %}Fuel Logs — TransitOps{% endblock %}
+{% block page_title %}Fuel Logs{% endblock %}
+
+{% block extra_head %}
+<style>
+  .toolbar { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:20px; }
+  .filters { display:flex; gap:10px; flex-wrap:wrap; }
+  .filters select, .filters input {
+    font-family: var(--font-mono); font-size:.78rem;
+    border:1px solid var(--line); background:var(--paper-card); color:var(--ink);
+    border-radius: var(--radius); padding:7px 10px;
+  }
+  .btn {
+    font-family: var(--font-display); font-size:.85rem; letter-spacing:.02em;
+    border:none; border-radius: var(--radius); padding:9px 16px; cursor:pointer;
+  }
+  .btn-primary { background: var(--graphite); color:#fff; }
+  .btn-primary:hover { background:#2a303a; }
+  .btn-ghost { background:transparent; border:1px solid var(--line); color:var(--ink-soft); }
+  .btn-ghost:hover { border-color: var(--signal-amber); color: var(--ink); }
+
+  table.data-table { width:100%; border-collapse:collapse; font-size:.86rem; }
+  table.data-table th {
+    font-family: var(--font-mono); font-size:.68rem; text-transform:uppercase; letter-spacing:.06em;
+    color: var(--ink-soft); text-align:left; padding:10px 14px; border-bottom:1px solid var(--line);
+  }
+  table.data-table td { padding:10px 14px; border-bottom:1px solid var(--line); vertical-align:middle; }
+  table.data-table tr:last-child td { border-bottom:none; }
+  table.data-table tr:hover td { background: rgba(240,166,58,.04); }
+  .row-actions { display:flex; gap:6px; }
+  .icon-btn {
+    font-family: var(--font-mono); font-size:.72rem;
+    border:1px solid var(--line); background:var(--paper-card); color:var(--ink-soft);
+    border-radius: 4px; padding:4px 8px; cursor:pointer;
+  }
+  .icon-btn:hover { border-color: var(--signal-amber); color:var(--ink); }
+  .icon-btn.danger:hover { border-color: var(--status-bad); color: var(--status-bad); }
+
+  .empty-state, .loading-state { text-align:center; padding:40px 20px; color:var(--ink-soft); }
+  .loading-state { font-family:var(--font-mono); font-size:.8rem; }
+  .empty-state { font-size:.88rem; }
+
+  .modal-overlay {
+    position:fixed; inset:0; background:rgba(28,33,40,.5);
+    display:none; align-items:center; justify-content:center; z-index:100; padding:20px;
+  }
+  .modal-overlay.open { display:flex; }
+  .modal {
+    background:var(--paper-card); border-radius: var(--radius); border:1px solid var(--line);
+    width:100%; max-width:480px; max-height:90vh; overflow-y:auto;
+  }
+  .modal-head { display:flex; align-items:center; justify-content:space-between; padding:18px 22px; border-bottom:1px solid var(--line); }
+  .modal-head h2 { font-family:var(--font-display); font-size:1.05rem; font-weight:500; margin:0; }
+  .modal-close { background:none; border:none; font-size:1.1rem; color:var(--ink-soft); cursor:pointer; }
+  .modal-body { padding:20px 22px; }
+  .modal-foot { display:flex; justify-content:flex-end; gap:10px; padding:16px 22px; border-top:1px solid var(--line); }
+  .field { margin-bottom:14px; }
+  .field label {
+    font-family:var(--font-mono); font-size:.68rem; text-transform:uppercase; letter-spacing:.06em;
+    color:var(--ink-soft); display:block; margin-bottom:6px;
+  }
+  .field input, .field select {
+    width:100%; padding:9px 12px; border:1px solid var(--line); border-radius: var(--radius);
+    font-family:var(--font-body); font-size:.88rem; background:var(--paper-card); color:var(--ink);
+  }
+  .field input:focus, .field select:focus { outline:2px solid var(--signal-amber); outline-offset:1px; border-color:var(--signal-amber); }
+  .field-hint { font-size:.74rem; color:var(--ink-soft); margin-top:4px; }
+  .modal-alert {
+    font-size:.82rem; padding:9px 12px; border-radius:var(--radius); border:1px solid var(--line);
+    border-left:3px solid var(--status-bad); margin-bottom:14px; display:none; background:var(--paper);
+  }
+  .card-table { overflow-x:auto; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="toolbar">
+  <div class="filters">
+    <select id="filterVehicle"><option value="">All vehicles</option></select>
+  </div>
+  <button class="btn btn-primary" id="openCreateBtn" style="display:none;">+ Add fuel log</button>
+</div>
+
+<div class="card card-table">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Vehicle</th>
+        <th>Trip</th>
+        <th>Quantity (L)</th>
+        <th>Cost / liter</th>
+        <th>Total cost</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody id="fuelRows">
+      <tr><td colspan="7"><div class="loading-state">Loading fuel logs…</div></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="modal-overlay" id="fuelModalOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <h2 id="modalTitle">Add fuel log</h2>
+      <button class="modal-close" id="modalCloseBtn" type="button">&times;</button>
+    </div>
+    <form id="fuelForm">
+      <div class="modal-body">
+        <div class="modal-alert" id="modalAlert"></div>
+        <input type="hidden" id="fuelId">
+        <div class="field">
+          <label for="vehicle_id">Vehicle</label>
+          <select id="vehicle_id" required></select>
+        </div>
+        <div class="field">
+          <label for="trip_id">Trip</label>
+          <select id="trip_id" required></select>
+          <div class="field-hint">Only trips for the selected vehicle are shown.</div>
+        </div>
+        <div class="field">
+          <label for="fuel_date">Date</label>
+          <input type="date" id="fuel_date" required>
+        </div>
+        <div class="field">
+          <label for="quantity">Quantity (liters)</label>
+          <input type="number" id="quantity" min="0" step="any" required>
+        </div>
+        <div class="field">
+          <label for="cost_per_liter">Cost per liter</label>
+          <input type="number" id="cost_per_liter" min="0" step="any" required>
+        </div>
+        <div class="field">
+          <label for="total_cost">Total cost (auto-calculated)</label>
+          <input type="number" id="total_cost" min="0" step="any" readonly>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn btn-ghost" id="cancelBtn">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="submitBtn">Save fuel log</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const CURRENT_ROLE = "{{ session.get('user_role', '') }}";
+const CAN_WRITE = ["Fleet Manager", "Dispatcher", "Financial Analyst"].includes(CURRENT_ROLE);
+const CAN_DELETE = ["Fleet Manager", "Financial Analyst"].includes(CURRENT_ROLE);
+
+let vehiclesById = {};
+let tripsById = {};
+
+const rowsEl = document.getElementById('fuelRows');
+const overlay = document.getElementById('fuelModalOverlay');
+const form = document.getElementById('fuelForm');
+const modalAlert = document.getElementById('modalAlert');
+const modalTitle = document.getElementById('modalTitle');
+const vehicleSelect = document.getElementById('vehicle_id');
+const tripSelect = document.getElementById('trip_id');
+const quantityInput = document.getElementById('quantity');
+const costPerLiterInput = document.getElementById('cost_per_liter');
+const totalCostInput = document.getElementById('total_cost');
+
+if (CAN_WRITE) document.getElementById('openCreateBtn').style.display = 'inline-block';
+
+document.getElementById('openCreateBtn').addEventListener('click', () => openModal());
+document.getElementById('modalCloseBtn').addEventListener('click', closeModal);
+document.getElementById('cancelBtn').addEventListener('click', closeModal);
+overlay.addEventListener('click', (e) => { if (e.target === overlay) closeModal(); });
+document.getElementById('filterVehicle').addEventListener('change', loadFuelLogs);
+
+vehicleSelect.addEventListener('change', () => populateTripSelect(vehicleSelect.value));
+[quantityInput, costPerLiterInput].forEach(el => el.addEventListener('input', recalcTotal));
+
+function recalcTotal() {
+  const q = parseFloat(quantityInput.value);
+  const c = parseFloat(costPerLiterInput.value);
+  totalCostInput.value = (isFinite(q) && isFinite(c)) ? (Math.round(q * c * 100) / 100) : '';
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str ?? '';
+  return div.innerHTML;
+}
+
+async function loadVehiclesAndTrips() {
+  const [vRes, tRes] = await Promise.all([
+    fetch('/api/vehicles', { headers: { Accept: 'application/json' } }),
+    fetch('/api/trips', { headers: { Accept: 'application/json' } }),
+  ]);
+  const vehicles = await vRes.json();
+  const trips = await tRes.json();
+  vehiclesById = Object.fromEntries(vehicles.map(v => [v.id, v]));
+  tripsById = Object.fromEntries(trips.map(t => [t.id, t]));
+
+  const filterVehicle = document.getElementById('filterVehicle');
+  filterVehicle.innerHTML = '<option value="">All vehicles</option>' +
+    vehicles.map(v => `<option value="${v.id}">${escapeHtml(v.registration_number)} — ${escapeHtml(v.vehicle_name)}</option>`).join('');
+
+  vehicleSelect.innerHTML = vehicles.map(v => `<option value="${v.id}">${escapeHtml(v.registration_number)} — ${escapeHtml(v.vehicle_name)}</option>`).join('');
+  populateTripSelect(vehicleSelect.value, trips);
+}
+
+function populateTripSelect(vehicleId, allTrips) {
+  const trips = allTrips || Object.values(tripsById);
+  const filtered = trips.filter(t => t.vehicle_id === vehicleId);
+  tripSelect.innerHTML = filtered.length
+    ? filtered.map(t => `<option value="${t.id}">${escapeHtml(t.source)} → ${escapeHtml(t.destination)} (${escapeHtml(t.status)})</option>`).join('')
+    : '<option value="">No trips for this vehicle</option>';
+}
+
+function openModal(log) {
+  form.reset();
+  modalAlert.style.display = 'none';
+  document.getElementById('fuelId').value = log ? log.id : '';
+  modalTitle.textContent = log ? 'Edit fuel log' : 'Add fuel log';
+  if (log) {
+    vehicleSelect.value = log.vehicle_id;
+    populateTripSelect(log.vehicle_id);
+    tripSelect.value = log.trip_id;
+    document.getElementById('fuel_date').value = log.fuel_date || '';
+    quantityInput.value = log.quantity ?? '';
+    costPerLiterInput.value = log.cost_per_liter ?? '';
+    totalCostInput.value = log.total_cost ?? '';
+  } else {
+    populateTripSelect(vehicleSelect.value);
+  }
+  overlay.classList.add('open');
+}
+
+function closeModal() { overlay.classList.remove('open'); }
+
+async function loadFuelLogs() {
+  rowsEl.innerHTML = '<tr><td colspan="7"><div class="loading-state">Loading fuel logs…</div></td></tr>';
+  const params = new URLSearchParams();
+  const vehicleId = document.getElementById('filterVehicle').value;
+  if (vehicleId) params.set('vehicle_id', vehicleId);
+
+  try {
+    const res = await fetch('/api/fuel?' + params.toString(), { headers: { Accept: 'application/json' } });
+    const logs = await res.json();
+    if (!Array.isArray(logs) || logs.length === 0) {
+      rowsEl.innerHTML = '<tr><td colspan="7"><div class="empty-state">No fuel logs found.</div></td></tr>';
+      return;
+    }
+    rowsEl.innerHTML = logs.map(rowHtml).join('');
+    logs.forEach(l => {
+      const editBtn = document.getElementById('edit-' + l.id);
+      const delBtn = document.getElementById('del-' + l.id);
+      if (editBtn) editBtn.addEventListener('click', () => openModal(l));
+      if (delBtn) delBtn.addEventListener('click', () => deleteLog(l.id));
+    });
+  } catch (err) {
+    rowsEl.innerHTML = '<tr><td colspan="7"><div class="empty-state">Could not load fuel logs.</div></td></tr>';
+  }
+}
+
+function rowHtml(l) {
+  const vehicle = vehiclesById[l.vehicle_id];
+  const trip = tripsById[l.trip_id];
+  let actions = '';
+  if (CAN_WRITE) actions += `<button class="icon-btn" id="edit-${l.id}" type="button">Edit</button>`;
+  if (CAN_DELETE) actions += `<button class="icon-btn danger" id="del-${l.id}" type="button">Delete</button>`;
+  return `<tr>
+    <td>${escapeHtml(l.fuel_date)}</td>
+    <td>${vehicle ? escapeHtml(vehicle.registration_number) : '—'}</td>
+    <td>${trip ? escapeHtml(trip.source) + ' → ' + escapeHtml(trip.destination) : '—'}</td>
+    <td>${l.quantity ?? ''}</td>
+    <td>${l.cost_per_liter ?? ''}</td>
+    <td>${l.total_cost ?? ''}</td>
+    <td><div class="row-actions">${actions}</div></td>
+  </tr>`;
+}
+
+async function deleteLog(id) {
+  if (!confirm('Delete this fuel log? This cannot be undone.')) return;
+  try {
+    const res = await fetch(`/api/fuel/${id}`, { method: 'DELETE', headers: { Accept: 'application/json' } });
+    const data = await res.json();
+    if (!res.ok) { alert(data.error || 'Could not delete fuel log.'); return; }
+    loadFuelLogs();
+  } catch (err) {
+    alert('Network error while deleting fuel log.');
+  }
+}
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  modalAlert.style.display = 'none';
+
+  const id = document.getElementById('fuelId').value;
+  const payload = {
+    vehicle_id: vehicleSelect.value,
+    trip_id: tripSelect.value,
+    fuel_date: document.getElementById('fuel_date').value,
+    quantity: parseFloat(quantityInput.value),
+    cost_per_liter: parseFloat(costPerLiterInput.value),
+    total_cost: parseFloat(totalCostInput.value),
+  };
+
+  const url = id ? `/api/fuel/${id}` : '/api/fuel';
+  const method = id ? 'PUT' : 'POST';
+
+  try {
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      modalAlert.textContent = data.error || 'Could not save fuel log.';
+      modalAlert.style.display = 'block';
+      return;
+    }
+    closeModal();
+    loadFuelLogs();
+  } catch (err) {
+    modalAlert.textContent = 'Network error while saving fuel log.';
+    modalAlert.style.display = 'block';
+  }
+});
+
+(async function init() {
+  await loadVehiclesAndTrips();
+  loadFuelLogs();
+})();
+</script>
+{% endblock %}

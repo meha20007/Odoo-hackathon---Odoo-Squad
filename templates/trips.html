@@ -1,0 +1,452 @@
+{% extends "base.html" %}
+{% block title %}Trips — TransitOps{% endblock %}
+{% block page_title %}Trips{% endblock %}
+
+{% block extra_head %}
+<style>
+  .toolbar { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:20px; }
+  .filters { display:flex; gap:10px; flex-wrap:wrap; }
+  .filters select, .filters input {
+    font-family: var(--font-mono); font-size:.78rem;
+    border:1px solid var(--line); background:var(--paper-card); color:var(--ink);
+    border-radius: var(--radius); padding:7px 10px;
+  }
+  .btn {
+    font-family: var(--font-display); font-size:.85rem; letter-spacing:.02em;
+    border:none; border-radius: var(--radius); padding:9px 16px; cursor:pointer;
+  }
+  .btn-primary { background: var(--graphite); color:#fff; }
+  .btn-primary:hover { background:#2a303a; }
+  .btn-ghost { background:transparent; border:1px solid var(--line); color:var(--ink-soft); }
+  .btn-ghost:hover { border-color: var(--signal-amber); color: var(--ink); }
+
+  table.data-table { width:100%; border-collapse:collapse; font-size:.86rem; }
+  table.data-table th {
+    font-family: var(--font-mono); font-size:.68rem; text-transform:uppercase; letter-spacing:.06em;
+    color: var(--ink-soft); text-align:left; padding:10px 14px; border-bottom:1px solid var(--line);
+  }
+  table.data-table td { padding:10px 14px; border-bottom:1px solid var(--line); vertical-align:middle; }
+  table.data-table tr:last-child td { border-bottom:none; }
+  table.data-table tr:hover td { background: rgba(240,166,58,.04); }
+  .row-actions { display:flex; gap:6px; flex-wrap:wrap; }
+  .icon-btn {
+    font-family: var(--font-mono); font-size:.72rem;
+    border:1px solid var(--line); background:var(--paper-card); color:var(--ink-soft);
+    border-radius: 4px; padding:4px 8px; cursor:pointer; white-space:nowrap;
+  }
+  .icon-btn:hover { border-color: var(--signal-amber); color:var(--ink); }
+  .icon-btn.danger:hover { border-color: var(--status-bad); color: var(--status-bad); }
+  .icon-btn.good:hover { border-color: var(--status-good); color: var(--status-good); }
+  .icon-btn.warn:hover { border-color: var(--signal-amber); color: var(--signal-amber-deep); }
+
+  .empty-state, .loading-state { text-align:center; padding:40px 20px; color:var(--ink-soft); }
+  .loading-state { font-family:var(--font-mono); font-size:.8rem; }
+  .empty-state { font-size:.88rem; }
+
+  .modal-overlay {
+    position:fixed; inset:0; background:rgba(28,33,40,.5);
+    display:none; align-items:center; justify-content:center; z-index:100; padding:20px;
+  }
+  .modal-overlay.open { display:flex; }
+  .modal {
+    background:var(--paper-card); border-radius: var(--radius); border:1px solid var(--line);
+    width:100%; max-width:520px; max-height:90vh; overflow-y:auto;
+  }
+  .modal-head { display:flex; align-items:center; justify-content:space-between; padding:18px 22px; border-bottom:1px solid var(--line); }
+  .modal-head h2 { font-family:var(--font-display); font-size:1.05rem; font-weight:500; margin:0; }
+  .modal-close { background:none; border:none; font-size:1.1rem; color:var(--ink-soft); cursor:pointer; }
+  .modal-body { padding:20px 22px; }
+  .modal-foot { display:flex; justify-content:flex-end; gap:10px; padding:16px 22px; border-top:1px solid var(--line); }
+  .field-row { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  .field { margin-bottom:14px; }
+  .field label {
+    font-family:var(--font-mono); font-size:.68rem; text-transform:uppercase; letter-spacing:.06em;
+    color:var(--ink-soft); display:block; margin-bottom:6px;
+  }
+  .field input, .field select {
+    width:100%; padding:9px 12px; border:1px solid var(--line); border-radius: var(--radius);
+    font-family:var(--font-body); font-size:.88rem; background:var(--paper-card); color:var(--ink);
+  }
+  .field input:focus, .field select:focus { outline:2px solid var(--signal-amber); outline-offset:1px; border-color:var(--signal-amber); }
+  .field-hint { font-size:.74rem; color:var(--ink-soft); margin-top:4px; }
+  .modal-alert {
+    font-size:.82rem; padding:9px 12px; border-radius:var(--radius); border:1px solid var(--line);
+    border-left:3px solid var(--status-bad); margin-bottom:14px; display:none; background:var(--paper);
+  }
+  .card-table { overflow-x:auto; }
+  @media (max-width: 520px) { .field-row { grid-template-columns:1fr; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="toolbar">
+  <div class="filters">
+    <select id="filterStatus">
+      <option value="">All statuses</option>
+      <option value="Draft">Draft</option>
+      <option value="Dispatched">Dispatched</option>
+      <option value="Completed">Completed</option>
+      <option value="Cancelled">Cancelled</option>
+    </select>
+    <select id="filterVehicle"><option value="">All vehicles</option></select>
+    <select id="filterDriver"><option value="">All drivers</option></select>
+  </div>
+  <button class="btn btn-primary" id="openCreateBtn" style="display:none;">+ New trip</button>
+</div>
+
+<div class="card card-table">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Route</th>
+        <th>Vehicle</th>
+        <th>Driver</th>
+        <th>Cargo (kg)</th>
+        <th>Distance (km)</th>
+        <th>Revenue</th>
+        <th>Status</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody id="tripRows">
+      <tr><td colspan="8"><div class="loading-state">Loading trips…</div></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="modal-overlay" id="tripModalOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <h2 id="modalTitle">New trip</h2>
+      <button class="modal-close" id="modalCloseBtn" type="button">&times;</button>
+    </div>
+    <form id="tripForm">
+      <div class="modal-body">
+        <div class="modal-alert" id="modalAlert"></div>
+        <input type="hidden" id="tripId">
+        <div class="field-row">
+          <div class="field">
+            <label for="source">Source</label>
+            <input type="text" id="source" required>
+          </div>
+          <div class="field">
+            <label for="destination">Destination</label>
+            <input type="text" id="destination" required>
+          </div>
+        </div>
+        <div class="field">
+          <label for="vehicle_id">Vehicle</label>
+          <select id="vehicle_id" required></select>
+          <div class="field-hint">Only vehicles currently available for dispatch are listed.</div>
+        </div>
+        <div class="field">
+          <label for="driver_id">Driver</label>
+          <select id="driver_id" required></select>
+          <div class="field-hint">Only drivers currently available for assignment are listed.</div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="cargo_weight">Cargo weight (kg)</label>
+            <input type="number" id="cargo_weight" min="0" step="any" required>
+          </div>
+          <div class="field">
+            <label for="planned_distance">Planned distance (km)</label>
+            <input type="number" id="planned_distance" min="0" step="any" required>
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="start_time">Start time</label>
+            <input type="datetime-local" id="start_time" required>
+          </div>
+          <div class="field">
+            <label for="end_time">Planned end time</label>
+            <input type="datetime-local" id="end_time" required>
+          </div>
+        </div>
+        <div class="field">
+          <label for="revenue">Expected revenue</label>
+          <input type="number" id="revenue" min="0" step="any" required>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn btn-ghost" id="cancelBtn">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="submitBtn">Save trip</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const CURRENT_ROLE = "{{ session.get('user_role', '') }}";
+const CAN_MANAGE = ["Fleet Manager", "Dispatcher"].includes(CURRENT_ROLE);
+const CAN_DELETE = CURRENT_ROLE === "Fleet Manager";
+
+const STATUS_PILL = { "Draft": "pill-neutral", "Dispatched": "pill-warn", "Completed": "pill-good", "Cancelled": "pill-bad" };
+
+let vehiclesById = {};
+let driversById = {};
+
+const rowsEl = document.getElementById('tripRows');
+const overlay = document.getElementById('tripModalOverlay');
+const form = document.getElementById('tripForm');
+const modalAlert = document.getElementById('modalAlert');
+const modalTitle = document.getElementById('modalTitle');
+const vehicleSelect = document.getElementById('vehicle_id');
+const driverSelect = document.getElementById('driver_id');
+
+if (CAN_MANAGE) document.getElementById('openCreateBtn').style.display = 'inline-block';
+
+document.getElementById('openCreateBtn').addEventListener('click', () => openModal());
+document.getElementById('modalCloseBtn').addEventListener('click', closeModal);
+document.getElementById('cancelBtn').addEventListener('click', closeModal);
+overlay.addEventListener('click', (e) => { if (e.target === overlay) closeModal(); });
+
+document.getElementById('filterStatus').addEventListener('change', loadTrips);
+document.getElementById('filterVehicle').addEventListener('change', loadTrips);
+document.getElementById('filterDriver').addEventListener('change', loadTrips);
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str ?? '';
+  return div.innerHTML;
+}
+
+function toLocalInput(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+async function loadReferenceData() {
+  const [vAllRes, dAllRes, vAvailRes, dAvailRes] = await Promise.all([
+    fetch('/api/vehicles', { headers: { Accept: 'application/json' } }),
+    fetch('/api/drivers', { headers: { Accept: 'application/json' } }),
+    fetch('/api/vehicles/available', { headers: { Accept: 'application/json' } }),
+    fetch('/api/drivers/available', { headers: { Accept: 'application/json' } }),
+  ]);
+  const allVehicles = await vAllRes.json();
+  const allDrivers = await dAllRes.json();
+  const availVehicles = await vAvailRes.json();
+  const availDrivers = await dAvailRes.json();
+
+  vehiclesById = Object.fromEntries(allVehicles.map(v => [v.id, v]));
+  driversById = Object.fromEntries(allDrivers.map(d => [d.id, d]));
+
+  document.getElementById('filterVehicle').innerHTML = '<option value="">All vehicles</option>' +
+    allVehicles.map(v => `<option value="${v.id}">${escapeHtml(v.registration_number)}</option>`).join('');
+  document.getElementById('filterDriver').innerHTML = '<option value="">All drivers</option>' +
+    allDrivers.map(d => `<option value="${d.id}">${escapeHtml(d.name)}</option>`).join('');
+
+  vehicleSelect.dataset.available = JSON.stringify(availVehicles.map(v => v.id));
+  driverSelect.dataset.available = JSON.stringify(availDrivers.map(d => d.id));
+
+  vehicleSelect.innerHTML = availVehicles.map(v => `<option value="${v.id}">${escapeHtml(v.registration_number)} — ${escapeHtml(v.vehicle_name)}</option>`).join('');
+  driverSelect.innerHTML = availDrivers.map(d => `<option value="${d.id}">${escapeHtml(d.name)}</option>`).join('');
+}
+
+function ensureOptionPresent(select, id, label) {
+  if (!id) return;
+  const exists = Array.from(select.options).some(o => o.value === id);
+  if (!exists) {
+    const opt = document.createElement('option');
+    opt.value = id;
+    opt.textContent = label + ' (currently assigned)';
+    select.prepend(opt);
+  }
+}
+
+function openModal(trip) {
+  form.reset();
+  modalAlert.style.display = 'none';
+  document.getElementById('tripId').value = trip ? trip.id : '';
+  modalTitle.textContent = trip ? 'Edit trip' : 'New trip';
+
+  if (trip) {
+    document.getElementById('source').value = trip.source || '';
+    document.getElementById('destination').value = trip.destination || '';
+    const vehicle = vehiclesById[trip.vehicle_id];
+    const driver = driversById[trip.driver_id];
+    ensureOptionPresent(vehicleSelect, trip.vehicle_id, vehicle ? vehicle.registration_number : trip.vehicle_id);
+    ensureOptionPresent(driverSelect, trip.driver_id, driver ? driver.name : trip.driver_id);
+    vehicleSelect.value = trip.vehicle_id;
+    driverSelect.value = trip.driver_id;
+    document.getElementById('cargo_weight').value = trip.cargo_weight ?? '';
+    document.getElementById('planned_distance').value = trip.planned_distance ?? '';
+    document.getElementById('start_time').value = toLocalInput(trip.start_time);
+    document.getElementById('end_time').value = toLocalInput(trip.end_time);
+    document.getElementById('revenue').value = trip.revenue ?? '';
+  }
+  overlay.classList.add('open');
+}
+
+function closeModal() { overlay.classList.remove('open'); }
+
+async function loadTrips() {
+  rowsEl.innerHTML = '<tr><td colspan="8"><div class="loading-state">Loading trips…</div></td></tr>';
+  const params = new URLSearchParams();
+  const status = document.getElementById('filterStatus').value;
+  const vehicleId = document.getElementById('filterVehicle').value;
+  const driverId = document.getElementById('filterDriver').value;
+  if (status) params.set('status', status);
+  if (vehicleId) params.set('vehicle_id', vehicleId);
+  if (driverId) params.set('driver_id', driverId);
+
+  try {
+    const res = await fetch('/api/trips?' + params.toString(), { headers: { Accept: 'application/json' } });
+    const trips = await res.json();
+    if (!Array.isArray(trips) || trips.length === 0) {
+      rowsEl.innerHTML = '<tr><td colspan="8"><div class="empty-state">No trips found.</div></td></tr>';
+      return;
+    }
+    rowsEl.innerHTML = trips.map(rowHtml).join('');
+    trips.forEach(t => {
+      const editBtn = document.getElementById('edit-' + t.id);
+      const delBtn = document.getElementById('del-' + t.id);
+      const dispatchBtn = document.getElementById('dispatch-' + t.id);
+      const completeBtn = document.getElementById('complete-' + t.id);
+      const cancelBtn = document.getElementById('cancel-' + t.id);
+      if (editBtn) editBtn.addEventListener('click', () => openModal(t));
+      if (delBtn) delBtn.addEventListener('click', () => deleteTrip(t.id));
+      if (dispatchBtn) dispatchBtn.addEventListener('click', () => tripAction(t.id, 'dispatch'));
+      if (completeBtn) completeBtn.addEventListener('click', () => completeTrip(t.id));
+      if (cancelBtn) cancelBtn.addEventListener('click', () => tripAction(t.id, 'cancel'));
+    });
+  } catch (err) {
+    rowsEl.innerHTML = '<tr><td colspan="8"><div class="empty-state">Could not load trips.</div></td></tr>';
+  }
+}
+
+function rowHtml(t) {
+  const vehicle = vehiclesById[t.vehicle_id];
+  const driver = driversById[t.driver_id];
+  const pill = STATUS_PILL[t.status] || 'pill-neutral';
+  const distance = t.actual_distance ?? t.planned_distance ?? '';
+
+  let actions = '';
+  if (CAN_MANAGE) {
+    if (t.status === 'Draft') {
+      actions += `<button class="icon-btn" id="edit-${t.id}" type="button">Edit</button>`;
+      actions += `<button class="icon-btn good" id="dispatch-${t.id}" type="button">Dispatch</button>`;
+      actions += `<button class="icon-btn danger" id="cancel-${t.id}" type="button">Cancel</button>`;
+    } else if (t.status === 'Dispatched') {
+      actions += `<button class="icon-btn good" id="complete-${t.id}" type="button">Complete</button>`;
+      actions += `<button class="icon-btn danger" id="cancel-${t.id}" type="button">Cancel</button>`;
+    }
+  }
+  if (CAN_DELETE && t.status !== 'Dispatched') {
+    actions += `<button class="icon-btn danger" id="del-${t.id}" type="button">Delete</button>`;
+  }
+
+  return `<tr>
+    <td>${escapeHtml(t.source)} → ${escapeHtml(t.destination)}</td>
+    <td>${vehicle ? escapeHtml(vehicle.registration_number) : '—'}</td>
+    <td>${driver ? escapeHtml(driver.name) : '—'}</td>
+    <td>${t.cargo_weight ?? ''}</td>
+    <td>${distance}</td>
+    <td>${t.revenue ?? ''}</td>
+    <td><span class="pill ${pill}">${escapeHtml(t.status)}</span></td>
+    <td><div class="row-actions">${actions}</div></td>
+  </tr>`;
+}
+
+async function deleteTrip(id) {
+  if (!confirm('Delete this trip? This cannot be undone.')) return;
+  try {
+    const res = await fetch(`/api/trips/${id}`, { method: 'DELETE', headers: { Accept: 'application/json' } });
+    const data = await res.json();
+    if (!res.ok) { alert(data.error || 'Could not delete trip.'); return; }
+    loadTrips();
+  } catch (err) {
+    alert('Network error while deleting trip.');
+  }
+}
+
+async function tripAction(id, action) {
+  const verb = { dispatch: 'dispatch', cancel: 'cancel' }[action];
+  if (!confirm(`Are you sure you want to ${verb} this trip?`)) return;
+  try {
+    const res = await fetch(`/api/trips/${id}/${action}`, { method: 'POST', headers: { Accept: 'application/json' } });
+    const data = await res.json();
+    if (!res.ok) { alert(data.error || `Could not ${verb} trip.`); return; }
+    loadReferenceData();
+    loadTrips();
+  } catch (err) {
+    alert(`Network error while trying to ${verb} trip.`);
+  }
+}
+
+async function completeTrip(id) {
+  const actualDistance = prompt('Actual distance travelled (km)? Leave blank to use planned distance.');
+  if (actualDistance === null) return;
+  const payload = {};
+  if (actualDistance.trim() !== '') {
+    const parsed = parseFloat(actualDistance);
+    if (!isFinite(parsed) || parsed < 0) { alert('Please enter a valid distance.'); return; }
+    payload.actual_distance = parsed;
+  }
+  try {
+    const res = await fetch(`/api/trips/${id}/complete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) { alert(data.error || 'Could not complete trip.'); return; }
+    loadReferenceData();
+    loadTrips();
+  } catch (err) {
+    alert('Network error while completing trip.');
+  }
+}
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  modalAlert.style.display = 'none';
+
+  const id = document.getElementById('tripId').value;
+  const payload = {
+    source: document.getElementById('source').value.trim(),
+    destination: document.getElementById('destination').value.trim(),
+    vehicle_id: vehicleSelect.value,
+    driver_id: driverSelect.value,
+    cargo_weight: parseFloat(document.getElementById('cargo_weight').value),
+    planned_distance: parseFloat(document.getElementById('planned_distance').value),
+    start_time: document.getElementById('start_time').value,
+    end_time: document.getElementById('end_time').value,
+    revenue: parseFloat(document.getElementById('revenue').value),
+  };
+
+  const url = id ? `/api/trips/${id}` : '/api/trips';
+  const method = id ? 'PUT' : 'POST';
+
+  try {
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      modalAlert.textContent = data.error || 'Could not save trip.';
+      modalAlert.style.display = 'block';
+      return;
+    }
+    closeModal();
+    loadReferenceData();
+    loadTrips();
+  } catch (err) {
+    modalAlert.textContent = 'Network error while saving trip.';
+    modalAlert.style.display = 'block';
+  }
+});
+
+(async function init() {
+  await loadReferenceData();
+  loadTrips();
+})();
+</script>
+{% endblock %}

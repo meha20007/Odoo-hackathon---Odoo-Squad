@@ -1,0 +1,300 @@
+{% extends "base.html" %}
+{% block title %}Drivers — TransitOps{% endblock %}
+{% block page_title %}Drivers{% endblock %}
+
+{% block extra_head %}
+<style>
+  .toolbar { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:20px; }
+  .filters { display:flex; gap:10px; flex-wrap:wrap; }
+  .filters select, .filters input {
+    font-family: var(--font-mono); font-size:.78rem;
+    border:1px solid var(--line); background:var(--paper-card); color:var(--ink);
+    border-radius: var(--radius); padding:7px 10px;
+  }
+  .btn {
+    font-family: var(--font-display); font-size:.85rem; letter-spacing:.02em;
+    border:none; border-radius: var(--radius); padding:9px 16px; cursor:pointer;
+  }
+  .btn-primary { background: var(--graphite); color:#fff; }
+  .btn-primary:hover { background:#2a303a; }
+  .btn-ghost { background:transparent; border:1px solid var(--line); color:var(--ink-soft); }
+  .btn-ghost:hover { border-color: var(--signal-amber); color: var(--ink); }
+
+  table.data-table { width:100%; border-collapse:collapse; font-size:.86rem; }
+  table.data-table th {
+    font-family: var(--font-mono); font-size:.68rem; text-transform:uppercase; letter-spacing:.06em;
+    color: var(--ink-soft); text-align:left; padding:10px 14px; border-bottom:1px solid var(--line);
+  }
+  table.data-table td { padding:10px 14px; border-bottom:1px solid var(--line); vertical-align:middle; }
+  table.data-table tr:last-child td { border-bottom:none; }
+  table.data-table tr:hover td { background: rgba(240,166,58,.04); }
+  .row-actions { display:flex; gap:6px; }
+  .icon-btn {
+    font-family: var(--font-mono); font-size:.72rem;
+    border:1px solid var(--line); background:var(--paper-card); color:var(--ink-soft);
+    border-radius: 4px; padding:4px 8px; cursor:pointer;
+  }
+  .icon-btn:hover { border-color: var(--signal-amber); color:var(--ink); }
+  .icon-btn.danger:hover { border-color: var(--status-bad); color: var(--status-bad); }
+
+  .empty-state, .loading-state { text-align:center; padding:40px 20px; color:var(--ink-soft); }
+  .loading-state { font-family:var(--font-mono); font-size:.8rem; }
+  .empty-state { font-size:.88rem; }
+  .expired-flag { color: var(--status-bad); font-family: var(--font-mono); font-size:.72rem; margin-left:6px; }
+
+  .modal-overlay {
+    position:fixed; inset:0; background:rgba(28,33,40,.5);
+    display:none; align-items:center; justify-content:center; z-index:100; padding:20px;
+  }
+  .modal-overlay.open { display:flex; }
+  .modal {
+    background:var(--paper-card); border-radius: var(--radius); border:1px solid var(--line);
+    width:100%; max-width:480px; max-height:90vh; overflow-y:auto;
+  }
+  .modal-head { display:flex; align-items:center; justify-content:space-between; padding:18px 22px; border-bottom:1px solid var(--line); }
+  .modal-head h2 { font-family:var(--font-display); font-size:1.05rem; font-weight:500; margin:0; }
+  .modal-close { background:none; border:none; font-size:1.1rem; color:var(--ink-soft); cursor:pointer; }
+  .modal-body { padding:20px 22px; }
+  .modal-foot { display:flex; justify-content:flex-end; gap:10px; padding:16px 22px; border-top:1px solid var(--line); }
+  .field { margin-bottom:14px; }
+  .field label {
+    font-family:var(--font-mono); font-size:.68rem; text-transform:uppercase; letter-spacing:.06em;
+    color:var(--ink-soft); display:block; margin-bottom:6px;
+  }
+  .field input, .field select {
+    width:100%; padding:9px 12px; border:1px solid var(--line); border-radius: var(--radius);
+    font-family:var(--font-body); font-size:.88rem; background:var(--paper-card); color:var(--ink);
+  }
+  .field input:focus, .field select:focus { outline:2px solid var(--signal-amber); outline-offset:1px; border-color:var(--signal-amber); }
+  .modal-alert {
+    font-size:.82rem; padding:9px 12px; border-radius:var(--radius); border:1px solid var(--line);
+    border-left:3px solid var(--status-bad); margin-bottom:14px; display:none; background:var(--paper);
+  }
+  .card-table { overflow-x:auto; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="toolbar">
+  <div class="filters">
+    <select id="filterStatus">
+      <option value="">All statuses</option>
+      <option value="Available">Available</option>
+      <option value="On Trip">On Trip</option>
+      <option value="Off Duty">Off Duty</option>
+      <option value="Suspended">Suspended</option>
+    </select>
+    <select id="filterExpired">
+      <option value="">Any license</option>
+      <option value="true">Expired license</option>
+      <option value="false">Valid license</option>
+    </select>
+  </div>
+  <button class="btn btn-primary" id="openCreateBtn" style="display:none;">+ Add driver</button>
+</div>
+
+<div class="card card-table">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>License number</th>
+        <th>License expiry</th>
+        <th>Status</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody id="driverRows">
+      <tr><td colspan="5"><div class="loading-state">Loading drivers…</div></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="modal-overlay" id="driverModalOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <h2 id="modalTitle">Add driver</h2>
+      <button class="modal-close" id="modalCloseBtn" type="button">&times;</button>
+    </div>
+    <form id="driverForm">
+      <div class="modal-body">
+        <div class="modal-alert" id="modalAlert"></div>
+        <input type="hidden" id="driverId">
+        <div class="field">
+          <label for="name">Full name</label>
+          <input type="text" id="name" required>
+        </div>
+        <div class="field">
+          <label for="license_number">License number</label>
+          <input type="text" id="license_number" required>
+        </div>
+        <div class="field">
+          <label for="license_expiry">License expiry</label>
+          <input type="date" id="license_expiry" required>
+        </div>
+        <div class="field">
+          <label for="status">Status</label>
+          <select id="status">
+            <option value="Available">Available</option>
+            <option value="On Trip">On Trip</option>
+            <option value="Off Duty">Off Duty</option>
+            <option value="Suspended">Suspended</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn btn-ghost" id="cancelBtn">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="submitBtn">Save driver</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const CURRENT_ROLE = "{{ session.get('user_role', '') }}";
+const CAN_WRITE = ["Fleet Manager", "Safety Officer"].includes(CURRENT_ROLE);
+const CAN_DELETE = CURRENT_ROLE === "Fleet Manager";
+
+const STATUS_PILL = {
+  "Available": "pill-good", "On Trip": "pill-warn", "Off Duty": "pill-neutral", "Suspended": "pill-bad"
+};
+
+const rowsEl = document.getElementById('driverRows');
+const overlay = document.getElementById('driverModalOverlay');
+const form = document.getElementById('driverForm');
+const modalAlert = document.getElementById('modalAlert');
+const modalTitle = document.getElementById('modalTitle');
+
+if (CAN_WRITE) document.getElementById('openCreateBtn').style.display = 'inline-block';
+
+document.getElementById('openCreateBtn').addEventListener('click', () => openModal());
+document.getElementById('modalCloseBtn').addEventListener('click', closeModal);
+document.getElementById('cancelBtn').addEventListener('click', closeModal);
+overlay.addEventListener('click', (e) => { if (e.target === overlay) closeModal(); });
+
+document.getElementById('filterStatus').addEventListener('change', loadDrivers);
+document.getElementById('filterExpired').addEventListener('change', loadDrivers);
+
+function openModal(driver) {
+  form.reset();
+  modalAlert.style.display = 'none';
+  document.getElementById('driverId').value = driver ? driver.id : '';
+  modalTitle.textContent = driver ? 'Edit driver' : 'Add driver';
+  if (driver) {
+    document.getElementById('name').value = driver.name || '';
+    document.getElementById('license_number').value = driver.license_number || '';
+    document.getElementById('license_expiry').value = driver.license_expiry || '';
+    document.getElementById('status').value = driver.status || 'Available';
+  } else {
+    document.getElementById('status').value = 'Available';
+  }
+  overlay.classList.add('open');
+}
+
+function closeModal() { overlay.classList.remove('open'); }
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str ?? '';
+  return div.innerHTML;
+}
+
+function isExpired(dateStr) {
+  if (!dateStr) return false;
+  return new Date(dateStr) < new Date(new Date().toDateString());
+}
+
+async function loadDrivers() {
+  rowsEl.innerHTML = '<tr><td colspan="5"><div class="loading-state">Loading drivers…</div></td></tr>';
+  const params = new URLSearchParams();
+  const status = document.getElementById('filterStatus').value;
+  const expired = document.getElementById('filterExpired').value;
+  if (status) params.set('status', status);
+  if (expired) params.set('license_expired', expired);
+
+  try {
+    const res = await fetch('/api/drivers?' + params.toString(), { headers: { Accept: 'application/json' } });
+    const drivers = await res.json();
+    if (!Array.isArray(drivers) || drivers.length === 0) {
+      rowsEl.innerHTML = '<tr><td colspan="5"><div class="empty-state">No drivers found.</div></td></tr>';
+      return;
+    }
+    rowsEl.innerHTML = drivers.map(rowHtml).join('');
+    drivers.forEach(d => {
+      const editBtn = document.getElementById('edit-' + d.id);
+      const delBtn = document.getElementById('del-' + d.id);
+      if (editBtn) editBtn.addEventListener('click', () => openModal(d));
+      if (delBtn) delBtn.addEventListener('click', () => deleteDriver(d.id, d.name));
+    });
+  } catch (err) {
+    rowsEl.innerHTML = '<tr><td colspan="5"><div class="empty-state">Could not load drivers.</div></td></tr>';
+  }
+}
+
+function rowHtml(d) {
+  const pill = STATUS_PILL[d.status] || 'pill-neutral';
+  const expiredTag = isExpired(d.license_expiry) ? '<span class="expired-flag">EXPIRED</span>' : '';
+  let actions = '';
+  if (CAN_WRITE) actions += `<button class="icon-btn" id="edit-${d.id}" type="button">Edit</button>`;
+  if (CAN_DELETE) actions += `<button class="icon-btn danger" id="del-${d.id}" type="button">Delete</button>`;
+  return `<tr>
+    <td>${escapeHtml(d.name)}</td>
+    <td>${escapeHtml(d.license_number)}</td>
+    <td>${escapeHtml(d.license_expiry)}${expiredTag}</td>
+    <td><span class="pill ${pill}">${escapeHtml(d.status)}</span></td>
+    <td><div class="row-actions">${actions}</div></td>
+  </tr>`;
+}
+
+async function deleteDriver(id, label) {
+  if (!confirm(`Delete driver ${label}? This cannot be undone.`)) return;
+  try {
+    const res = await fetch(`/api/drivers/${id}`, { method: 'DELETE', headers: { Accept: 'application/json' } });
+    const data = await res.json();
+    if (!res.ok) { alert(data.error || 'Could not delete driver.'); return; }
+    loadDrivers();
+  } catch (err) {
+    alert('Network error while deleting driver.');
+  }
+}
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  modalAlert.style.display = 'none';
+
+  const id = document.getElementById('driverId').value;
+  const payload = {
+    name: document.getElementById('name').value.trim(),
+    license_number: document.getElementById('license_number').value.trim(),
+    license_expiry: document.getElementById('license_expiry').value,
+    status: document.getElementById('status').value,
+  };
+
+  const url = id ? `/api/drivers/${id}` : '/api/drivers';
+  const method = id ? 'PUT' : 'POST';
+
+  try {
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      modalAlert.textContent = data.error || 'Could not save driver.';
+      modalAlert.style.display = 'block';
+      return;
+    }
+    closeModal();
+    loadDrivers();
+  } catch (err) {
+    modalAlert.textContent = 'Network error while saving driver.';
+    modalAlert.style.display = 'block';
+  }
+});
+
+loadDrivers();
+</script>
+{% endblock %}
