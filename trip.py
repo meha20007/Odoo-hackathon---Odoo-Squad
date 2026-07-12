@@ -49,7 +49,9 @@ class TripFallback:
         return list(db.trips.find())
 
     @staticmethod
-    def create(vehicle_id, driver_id, start_location, end_location, start_time, end_time, status="scheduled", distance=0.0):
+    def create(vehicle_id, driver_id, source, destination, start_time, end_time,
+               status="scheduled", cargo_weight=0.0, planned_distance=0.0,
+               actual_distance=0.0, revenue=0.0):
         # Convert times to datetime objects if they are strings
         if isinstance(start_time, str):
             start_time = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
@@ -59,12 +61,15 @@ class TripFallback:
         trip_data = {
             "vehicle_id": str(vehicle_id),
             "driver_id": str(driver_id),
-            "start_location": start_location.strip(),
-            "end_location": end_location.strip(),
+            "source": source.strip(),
+            "destination": destination.strip(),
             "start_time": start_time,
             "end_time": end_time,
             "status": status,
-            "distance": float(distance)
+            "cargo_weight": float(cargo_weight),
+            "planned_distance": float(planned_distance),
+            "actual_distance": float(actual_distance),
+            "revenue": float(revenue)
         }
         result = db.trips.insert_one(trip_data)
         trip_data["_id"] = result.inserted_id
@@ -75,14 +80,20 @@ class TripFallback:
         try:
             if isinstance(trip_id, str):
                 trip_id = ObjectId(trip_id)
-            
+
             # Format types
             if "start_time" in update_data and isinstance(update_data["start_time"], str):
                 update_data["start_time"] = datetime.fromisoformat(update_data["start_time"].replace("Z", "+00:00"))
             if "end_time" in update_data and isinstance(update_data["end_time"], str):
                 update_data["end_time"] = datetime.fromisoformat(update_data["end_time"].replace("Z", "+00:00"))
-            if "distance" in update_data:
-                update_data["distance"] = float(update_data["distance"])
+            if "cargo_weight" in update_data:
+                update_data["cargo_weight"] = float(update_data["cargo_weight"])
+            if "planned_distance" in update_data:
+                update_data["planned_distance"] = float(update_data["planned_distance"])
+            if "actual_distance" in update_data:
+                update_data["actual_distance"] = float(update_data["actual_distance"])
+            if "revenue" in update_data:
+                update_data["revenue"] = float(update_data["revenue"])
             if "vehicle_id" in update_data:
                 update_data["vehicle_id"] = str(update_data["vehicle_id"])
             if "driver_id" in update_data:
@@ -156,11 +167,14 @@ def validate_trip_data(data, is_update=False):
 
     vehicle_id = data.get("vehicle_id")
     driver_id = data.get("driver_id")
-    start_location = data.get("start_location")
-    end_location = data.get("end_location")
+    source = data.get("source")
+    destination = data.get("destination")
     start_time_str = data.get("start_time")
     end_time_str = data.get("end_time")
-    distance = data.get("distance")
+    cargo_weight = data.get("cargo_weight")
+    planned_distance = data.get("planned_distance")
+    actual_distance = data.get("actual_distance")
+    revenue = data.get("revenue")
     status = data.get("status")
 
     if not is_update or vehicle_id is not None:
@@ -175,17 +189,17 @@ def validate_trip_data(data, is_update=False):
         else:
             validated["driver_id"] = str(driver_id)
 
-    if not is_update or start_location is not None:
-        if not start_location or not isinstance(start_location, str) or not start_location.strip():
-            errors.append("Start location must be a non-empty string.")
+    if not is_update or source is not None:
+        if not source or not isinstance(source, str) or not source.strip():
+            errors.append("Source must be a non-empty string.")
         else:
-            validated["start_location"] = start_location.strip()
+            validated["source"] = source.strip()
 
-    if not is_update or end_location is not None:
-        if not end_location or not isinstance(end_location, str) or not end_location.strip():
-            errors.append("End location must be a non-empty string.")
+    if not is_update or destination is not None:
+        if not destination or not isinstance(destination, str) or not destination.strip():
+            errors.append("Destination must be a non-empty string.")
         else:
-            validated["end_location"] = end_location.strip()
+            validated["destination"] = destination.strip()
 
     # Time validations
     start_time = None
@@ -213,15 +227,45 @@ def validate_trip_data(data, is_update=False):
         if start_time and end_time and end_time <= start_time:
             errors.append("End time must be strictly after the start time.")
 
-    if distance is not None:
+    if cargo_weight is not None:
         try:
-            dist_val = float(distance)
-            if dist_val < 0:
-                errors.append("Distance cannot be negative.")
+            cw_val = float(cargo_weight)
+            if cw_val < 0:
+                errors.append("Cargo weight cannot be negative.")
             else:
-                validated["distance"] = dist_val
+                validated["cargo_weight"] = cw_val
         except (ValueError, TypeError):
-            errors.append("Distance must be a valid float.")
+            errors.append("Cargo weight must be a valid float.")
+
+    if planned_distance is not None:
+        try:
+            pd_val = float(planned_distance)
+            if pd_val < 0:
+                errors.append("Planned distance cannot be negative.")
+            else:
+                validated["planned_distance"] = pd_val
+        except (ValueError, TypeError):
+            errors.append("Planned distance must be a valid float.")
+
+    if actual_distance is not None:
+        try:
+            ad_val = float(actual_distance)
+            if ad_val < 0:
+                errors.append("Actual distance cannot be negative.")
+            else:
+                validated["actual_distance"] = ad_val
+        except (ValueError, TypeError):
+            errors.append("Actual distance must be a valid float.")
+
+    if revenue is not None:
+        try:
+            rev_val = float(revenue)
+            if rev_val < 0:
+                errors.append("Revenue cannot be negative.")
+            else:
+                validated["revenue"] = rev_val
+        except (ValueError, TypeError):
+            errors.append("Revenue must be a valid float.")
 
     if status is not None:
         valid_statuses = ["scheduled", "ongoing", "completed", "cancelled"]
@@ -260,7 +304,7 @@ def get_trip(trip_id):
     trip = db_trip_helper.find_by_id(trip_id)
     if not trip:
         return jsonify({"error": "Trip not found."}), 404
-    
+
     trip["_id"] = str(trip["_id"])
     if isinstance(trip.get("start_time"), datetime):
         trip["start_time"] = trip["start_time"].isoformat()
@@ -302,12 +346,15 @@ def create_trip():
     trip = db_trip_helper.create(
         vehicle_id=vehicle_id,
         driver_id=driver_id,
-        start_location=validated_data["start_location"],
-        end_location=validated_data["end_location"],
+        source=validated_data["source"],
+        destination=validated_data["destination"],
         start_time=start_time,
         end_time=end_time,
         status=validated_data.get("status", "scheduled"),
-        distance=validated_data.get("distance", 0.0)
+        cargo_weight=validated_data.get("cargo_weight", 0.0),
+        planned_distance=validated_data.get("planned_distance", 0.0),
+        actual_distance=validated_data.get("actual_distance", 0.0),
+        revenue=validated_data.get("revenue", 0.0)
     )
     trip["_id"] = str(trip["_id"])
     trip["start_time"] = trip["start_time"].isoformat()
