@@ -8,6 +8,7 @@ from flask import Blueprint, Response, jsonify, request
 from database.db import db
 from rbac import login_required, role_required
 from utils.helpers import parse_object_id
+from flask import render_template
 
 reports_bp = Blueprint("reports", __name__, url_prefix="/api/reports")
 
@@ -306,3 +307,8 @@ def export_csv():
         mimetype="text/csv",
         headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
+
+@reports_bp.route("/dashboard-view", methods=["GET"])
+@login_required
+def report_dashboard_view():
+    return render_template("analytics.html")
