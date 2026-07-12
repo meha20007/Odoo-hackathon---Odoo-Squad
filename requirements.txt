@@ -1,0 +1,21 @@
+fastapi[standard]
+uvicorn[standard]
+
+# Database
+motor
+pymongo
+
+# Validation
+pydantic
+email-validator
+
+# Templates & Forms
+jinja2
+python-multipart
+
+# Environment Variables
+python-dotenv
+
+# Authentication
+passlib[bcrypt]
+PyJWT
