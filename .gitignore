@@ -1,8 +1,7 @@
 .idea/
 .venv/
 
-# Ignore only the local database configuration
-database/db.py
+
 
 # Python cache
 __pycache__/
@@ -10,3 +9,4 @@ __pycache__/
 
 # Environment variables
 .env
+
