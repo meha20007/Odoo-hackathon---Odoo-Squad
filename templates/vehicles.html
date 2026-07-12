@@ -1,0 +1,322 @@
+{% extends "base.html" %}
+{% block title %}Vehicles — TransitOps{% endblock %}
+{% block page_title %}Vehicles{% endblock %}
+
+{% block extra_head %}
+<style>
+  .toolbar { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:20px; }
+  .filters { display:flex; gap:10px; flex-wrap:wrap; }
+  .filters select, .filters input {
+    font-family: var(--font-mono); font-size:.78rem;
+    border:1px solid var(--line); background:var(--paper-card); color:var(--ink);
+    border-radius: var(--radius); padding:7px 10px;
+  }
+  .btn {
+    font-family: var(--font-display); font-size:.85rem; letter-spacing:.02em;
+    border:none; border-radius: var(--radius); padding:9px 16px; cursor:pointer;
+  }
+  .btn-primary { background: var(--graphite); color:#fff; }
+  .btn-primary:hover { background:#2a303a; }
+  .btn-ghost { background:transparent; border:1px solid var(--line); color:var(--ink-soft); }
+  .btn-ghost:hover { border-color: var(--signal-amber); color: var(--ink); }
+
+  table.data-table { width:100%; border-collapse:collapse; font-size:.86rem; }
+  table.data-table th {
+    font-family: var(--font-mono); font-size:.68rem; text-transform:uppercase; letter-spacing:.06em;
+    color: var(--ink-soft); text-align:left; padding:10px 14px; border-bottom:1px solid var(--line);
+  }
+  table.data-table td { padding:10px 14px; border-bottom:1px solid var(--line); vertical-align:middle; }
+  table.data-table tr:last-child td { border-bottom:none; }
+  table.data-table tr:hover td { background: rgba(240,166,58,.04); }
+  .row-actions { display:flex; gap:6px; }
+  .icon-btn {
+    font-family: var(--font-mono); font-size:.72rem;
+    border:1px solid var(--line); background:var(--paper-card); color:var(--ink-soft);
+    border-radius: 4px; padding:4px 8px; cursor:pointer;
+  }
+  .icon-btn:hover { border-color: var(--signal-amber); color:var(--ink); }
+  .icon-btn.danger:hover { border-color: var(--status-bad); color: var(--status-bad); }
+
+  .empty-state, .loading-state { text-align:center; padding:40px 20px; color:var(--ink-soft); }
+  .loading-state { font-family:var(--font-mono); font-size:.8rem; }
+  .empty-state { font-size:.88rem; }
+
+  .modal-overlay {
+    position:fixed; inset:0; background:rgba(28,33,40,.5);
+    display:none; align-items:center; justify-content:center; z-index:100; padding:20px;
+  }
+  .modal-overlay.open { display:flex; }
+  .modal {
+    background:var(--paper-card); border-radius: var(--radius); border:1px solid var(--line);
+    width:100%; max-width:480px; max-height:90vh; overflow-y:auto;
+  }
+  .modal-head { display:flex; align-items:center; justify-content:space-between; padding:18px 22px; border-bottom:1px solid var(--line); }
+  .modal-head h2 { font-family:var(--font-display); font-size:1.05rem; font-weight:500; margin:0; }
+  .modal-close { background:none; border:none; font-size:1.1rem; color:var(--ink-soft); cursor:pointer; }
+  .modal-body { padding:20px 22px; }
+  .modal-foot { display:flex; justify-content:flex-end; gap:10px; padding:16px 22px; border-top:1px solid var(--line); }
+  .field { margin-bottom:14px; }
+  .field label {
+    font-family:var(--font-mono); font-size:.68rem; text-transform:uppercase; letter-spacing:.06em;
+    color:var(--ink-soft); display:block; margin-bottom:6px;
+  }
+  .field input, .field select {
+    width:100%; padding:9px 12px; border:1px solid var(--line); border-radius: var(--radius);
+    font-family:var(--font-body); font-size:.88rem; background:var(--paper-card); color:var(--ink);
+  }
+  .field input:focus, .field select:focus { outline:2px solid var(--signal-amber); outline-offset:1px; border-color:var(--signal-amber); }
+  .modal-alert {
+    font-size:.82rem; padding:9px 12px; border-radius:var(--radius); border:1px solid var(--line);
+    border-left:3px solid var(--status-bad); margin-bottom:14px; display:none; background:var(--paper);
+  }
+  .card-table { overflow-x:auto; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="toolbar">
+  <div class="filters">
+    <select id="filterStatus">
+      <option value="">All statuses</option>
+      <option value="Available">Available</option>
+      <option value="On Trip">On Trip</option>
+      <option value="In Shop">In Shop</option>
+      <option value="Retired">Retired</option>
+    </select>
+    <input type="text" id="filterType" placeholder="Filter by type…">
+  </div>
+  <button class="btn btn-primary" id="openCreateBtn" style="display:none;">+ Add vehicle</button>
+</div>
+
+<div class="card card-table">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Registration</th>
+        <th>Name</th>
+        <th>Type</th>
+        <th>Max load</th>
+        <th>Odometer</th>
+        <th>Acquisition cost</th>
+        <th>Status</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody id="vehicleRows">
+      <tr><td colspan="8"><div class="loading-state">Loading vehicles…</div></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="modal-overlay" id="vehicleModalOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <h2 id="modalTitle">Add vehicle</h2>
+      <button class="modal-close" id="modalCloseBtn" type="button">&times;</button>
+    </div>
+    <form id="vehicleForm">
+      <div class="modal-body">
+        <div class="modal-alert" id="modalAlert"></div>
+        <input type="hidden" id="vehicleId">
+        <div class="field">
+          <label for="registration_number">Registration number</label>
+          <input type="text" id="registration_number" required>
+        </div>
+        <div class="field">
+          <label for="vehicle_name">Vehicle name</label>
+          <input type="text" id="vehicle_name" required>
+        </div>
+        <div class="field">
+          <label for="vehicle_type">Vehicle type</label>
+          <input type="text" id="vehicle_type" list="vehicleTypeOptions" required>
+          <datalist id="vehicleTypeOptions">
+            <option value="Truck"><option value="Van"><option value="Bus"><option value="Pickup"><option value="Trailer">
+          </datalist>
+        </div>
+        <div class="field">
+          <label for="max_load_capacity">Max load capacity (kg)</label>
+          <input type="number" id="max_load_capacity" min="0" step="any" required>
+        </div>
+        <div class="field">
+          <label for="odometer">Odometer (km)</label>
+          <input type="number" id="odometer" min="0" step="any" required>
+        </div>
+        <div class="field">
+          <label for="acquisition_cost">Acquisition cost</label>
+          <input type="number" id="acquisition_cost" min="0" step="any" required>
+        </div>
+        <div class="field">
+          <label for="status">Status</label>
+          <select id="status">
+            <option value="Available">Available</option>
+            <option value="On Trip">On Trip</option>
+            <option value="In Shop">In Shop</option>
+            <option value="Retired">Retired</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn btn-ghost" id="cancelBtn">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="submitBtn">Save vehicle</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const CURRENT_ROLE = "{{ session.get('user_role', '') }}";
+const CAN_WRITE = ["Fleet Manager"].includes(CURRENT_ROLE);
+
+const STATUS_PILL = {
+  "Available": "pill-good", "On Trip": "pill-warn", "In Shop": "pill-bad", "Retired": "pill-neutral"
+};
+
+const rowsEl = document.getElementById('vehicleRows');
+const overlay = document.getElementById('vehicleModalOverlay');
+const form = document.getElementById('vehicleForm');
+const modalAlert = document.getElementById('modalAlert');
+const modalTitle = document.getElementById('modalTitle');
+
+if (CAN_WRITE) document.getElementById('openCreateBtn').style.display = 'inline-block';
+
+document.getElementById('openCreateBtn').addEventListener('click', () => openModal());
+document.getElementById('modalCloseBtn').addEventListener('click', closeModal);
+document.getElementById('cancelBtn').addEventListener('click', closeModal);
+overlay.addEventListener('click', (e) => { if (e.target === overlay) closeModal(); });
+
+document.getElementById('filterStatus').addEventListener('change', loadVehicles);
+document.getElementById('filterType').addEventListener('input', debounce(loadVehicles, 300));
+
+function debounce(fn, ms) {
+  let t;
+  return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+}
+
+function openModal(vehicle) {
+  form.reset();
+  modalAlert.style.display = 'none';
+  document.getElementById('vehicleId').value = vehicle ? vehicle.id : '';
+  modalTitle.textContent = vehicle ? 'Edit vehicle' : 'Add vehicle';
+  if (vehicle) {
+    document.getElementById('registration_number').value = vehicle.registration_number || '';
+    document.getElementById('vehicle_name').value = vehicle.vehicle_name || '';
+    document.getElementById('vehicle_type').value = vehicle.vehicle_type || '';
+    document.getElementById('max_load_capacity').value = vehicle.max_load_capacity ?? '';
+    document.getElementById('odometer').value = vehicle.odometer ?? '';
+    document.getElementById('acquisition_cost').value = vehicle.acquisition_cost ?? '';
+    document.getElementById('status').value = vehicle.status || 'Available';
+  } else {
+    document.getElementById('status').value = 'Available';
+  }
+  overlay.classList.add('open');
+}
+
+function closeModal() { overlay.classList.remove('open'); }
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str ?? '';
+  return div.innerHTML;
+}
+
+async function loadVehicles() {
+  rowsEl.innerHTML = '<tr><td colspan="8"><div class="loading-state">Loading vehicles…</div></td></tr>';
+  const params = new URLSearchParams();
+  const status = document.getElementById('filterStatus').value;
+  const type = document.getElementById('filterType').value.trim();
+  if (status) params.set('status', status);
+  if (type) params.set('vehicle_type', type);
+
+  try {
+    const res = await fetch('/api/vehicles?' + params.toString(), { headers: { Accept: 'application/json' } });
+    const vehicles = await res.json();
+    if (!Array.isArray(vehicles) || vehicles.length === 0) {
+      rowsEl.innerHTML = '<tr><td colspan="8"><div class="empty-state">No vehicles found.</div></td></tr>';
+      return;
+    }
+    rowsEl.innerHTML = vehicles.map(rowHtml).join('');
+    vehicles.forEach(v => {
+      const editBtn = document.getElementById('edit-' + v.id);
+      const delBtn = document.getElementById('del-' + v.id);
+      if (editBtn) editBtn.addEventListener('click', () => openModal(v));
+      if (delBtn) delBtn.addEventListener('click', () => deleteVehicle(v.id, v.registration_number));
+    });
+  } catch (err) {
+    rowsEl.innerHTML = '<tr><td colspan="8"><div class="empty-state">Could not load vehicles.</div></td></tr>';
+  }
+}
+
+function rowHtml(v) {
+  const pill = STATUS_PILL[v.status] || 'pill-neutral';
+  const actions = CAN_WRITE ? `
+    <div class="row-actions">
+      <button class="icon-btn" id="edit-${v.id}" type="button">Edit</button>
+      <button class="icon-btn danger" id="del-${v.id}" type="button">Delete</button>
+    </div>` : '';
+  return `<tr>
+    <td>${escapeHtml(v.registration_number)}</td>
+    <td>${escapeHtml(v.vehicle_name)}</td>
+    <td>${escapeHtml(v.vehicle_type)}</td>
+    <td>${v.max_load_capacity ?? ''}</td>
+    <td>${v.odometer ?? ''}</td>
+    <td>${v.acquisition_cost ?? ''}</td>
+    <td><span class="pill ${pill}">${escapeHtml(v.status)}</span></td>
+    <td>${actions}</td>
+  </tr>`;
+}
+
+async function deleteVehicle(id, label) {
+  if (!confirm(`Delete vehicle ${label}? This cannot be undone.`)) return;
+  try {
+    const res = await fetch(`/api/vehicles/${id}`, { method: 'DELETE', headers: { Accept: 'application/json' } });
+    const data = await res.json();
+    if (!res.ok) { alert(data.error || 'Could not delete vehicle.'); return; }
+    loadVehicles();
+  } catch (err) {
+    alert('Network error while deleting vehicle.');
+  }
+}
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  modalAlert.style.display = 'none';
+
+  const id = document.getElementById('vehicleId').value;
+  const payload = {
+    registration_number: document.getElementById('registration_number').value.trim(),
+    vehicle_name: document.getElementById('vehicle_name').value.trim(),
+    vehicle_type: document.getElementById('vehicle_type').value.trim(),
+    max_load_capacity: parseFloat(document.getElementById('max_load_capacity').value),
+    odometer: parseFloat(document.getElementById('odometer').value),
+    acquisition_cost: parseFloat(document.getElementById('acquisition_cost').value),
+    status: document.getElementById('status').value,
+  };
+
+  const url = id ? `/api/vehicles/${id}` : '/api/vehicles';
+  const method = id ? 'PUT' : 'POST';
+
+  try {
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      modalAlert.textContent = data.error || 'Could not save vehicle.';
+      modalAlert.style.display = 'block';
+      return;
+    }
+    closeModal();
+    loadVehicles();
+  } catch (err) {
+    modalAlert.textContent = 'Network error while saving vehicle.';
+    modalAlert.style.display = 'block';
+  }
+});
+
+loadVehicles();
+</script>
+{% endblock %}

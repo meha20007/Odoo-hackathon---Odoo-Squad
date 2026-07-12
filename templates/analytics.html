@@ -27,6 +27,7 @@
     padding: 7px 14px;
   }
   .export-btn:hover { border-color: var(--signal-amber); color: var(--ink); }
+  .loading-state { text-align:center; padding:40px 20px; color:var(--ink-soft); font-family:var(--font-mono); font-size:.8rem; }
 </style>
 {% endblock %}
 
@@ -66,42 +67,46 @@ const bad = '#c4483b';
 const neutral = '#5b6470';
 
 async function loadAnalytics() {
-  const fleetRes = await fetch('/api/reports/fleet-utilization', { headers: { Accept: 'application/json' } });
-  const fleet = await fleetRes.json();
+  try {
+    const fleetRes = await fetch('/api/reports/fleet-utilization', { headers: { Accept: 'application/json' } });
+    const fleet = await fleetRes.json();
 
-  new Chart(document.getElementById('fleetUtilChart'), {
-    type: 'doughnut',
-    data: {
-      labels: ['Available', 'On Trip', 'In Shop', 'Retired'],
-      datasets: [{
-        data: [fleet.available_vehicles, fleet.vehicles_on_trip, fleet.vehicles_in_maintenance, fleet.retired_vehicles],
-        backgroundColor: [good, amber, bad, neutral]
-      }]
-    },
-    options: { plugins: { legend: { position: 'bottom' } } }
-  });
+    new Chart(document.getElementById('fleetUtilChart'), {
+      type: 'doughnut',
+      data: {
+        labels: ['Available', 'On Trip', 'In Shop', 'Retired'],
+        datasets: [{
+          data: [fleet.available_vehicles, fleet.vehicles_on_trip, fleet.vehicles_in_maintenance, fleet.retired_vehicles],
+          backgroundColor: [good, amber, bad, neutral]
+        }]
+      },
+      options: { plugins: { legend: { position: 'bottom' } } }
+    });
 
-  const feRes = await fetch('/api/reports/fuel-efficiency', { headers: { Accept: 'application/json' } });
-  const vehicles = await feRes.json();
-  const labels = vehicles.map(v => v.registration_number);
+    const feRes = await fetch('/api/reports/fuel-efficiency', { headers: { Accept: 'application/json' } });
+    const vehicles = await feRes.json();
+    const labels = vehicles.map(v => v.registration_number);
 
-  new Chart(document.getElementById('fuelEfficiencyChart'), {
-    type: 'bar',
-    data: { labels, datasets: [{ label: 'km/L', data: vehicles.map(v => v.fuel_efficiency_km_per_liter || 0), backgroundColor: amber }] },
-    options: { plugins: { legend: { display: false } } }
-  });
+    new Chart(document.getElementById('fuelEfficiencyChart'), {
+      type: 'bar',
+      data: { labels, datasets: [{ label: 'km/L', data: vehicles.map(v => v.fuel_efficiency_km_per_liter || 0), backgroundColor: amber }] },
+      options: { plugins: { legend: { display: false } } }
+    });
 
-  new Chart(document.getElementById('opCostChart'), {
-    type: 'bar',
-    data: { labels, datasets: [{ label: 'Cost (₹)', data: vehicles.map(v => v.operational_cost), backgroundColor: neutral }] },
-    options: { plugins: { legend: { display: false } } }
-  });
+    new Chart(document.getElementById('opCostChart'), {
+      type: 'bar',
+      data: { labels, datasets: [{ label: 'Cost (₹)', data: vehicles.map(v => v.operational_cost), backgroundColor: neutral }] },
+      options: { plugins: { legend: { display: false } } }
+    });
 
-  new Chart(document.getElementById('roiChart'), {
-    type: 'bar',
-    data: { labels, datasets: [{ label: 'ROI', data: vehicles.map(v => v.vehicle_roi || 0), backgroundColor: good }] },
-    options: { plugins: { legend: { display: false } } }
-  });
+    new Chart(document.getElementById('roiChart'), {
+      type: 'bar',
+      data: { labels, datasets: [{ label: 'ROI', data: vehicles.map(v => v.vehicle_roi || 0), backgroundColor: good }] },
+      options: { plugins: { legend: { display: false } } }
+    });
+  } catch (err) {
+    console.error('Failed to load analytics', err);
+  }
 }
 
 loadAnalytics();
