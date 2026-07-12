@@ -6,11 +6,13 @@ from bson import ObjectId
 # 1. MongoDB Connection Setup (with fallback if database/db.py is empty or unavailable)
 try:
     from database.db import db
+
     # Verify db is actually defined
     if db is None:
         raise AttributeError
 except (ImportError, AttributeError):
     from pymongo import MongoClient
+
     MONGO_URI = os.environ.get("MONGO_URI", "mongodb://localhost:27017/odoo_hackathon")
     try:
         client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=2000)
@@ -34,6 +36,7 @@ for model_path in ["database.models", "models", "models.user"]:
         break
     except (ImportError, AttributeError):
         continue
+
 
 # Fallback helper class representing the expected interface
 class UserFallback:
@@ -62,6 +65,7 @@ class UserFallback:
         user_data["_id"] = result.inserted_id
         return user_data
 
+
 # Use active User model if available, else fallback
 db_user_helper = User if User is not None else UserFallback
 
@@ -83,12 +87,12 @@ def authenticate_user(email, password):
     """
     if not email or not password:
         return None, "Email and password are required."
-    
+
     # Lookup user
     user = db_user_helper.find_by_email(email)
     if not user:
         return None, "Invalid email or password."
-        
+
     # Retrieve password hash (handles objects or dictionaries)
     if hasattr(user, "password_hash"):
         password_hash = user.password_hash
@@ -99,7 +103,7 @@ def authenticate_user(email, password):
 
     if not password_hash or not verify_password(password_hash, password):
         return None, "Invalid email or password."
-        
+
     return user, None
 
 
@@ -124,19 +128,22 @@ def register():
 
         if not email or not password:
             err = "Email and password are required."
-            return jsonify({"error": err}) if request.is_json else (flash(err, "danger") or render_template("register.html"))
+            return jsonify({"error": err}) if request.is_json else (
+                        flash(err, "danger") or render_template("register.html"))
 
         if password != confirm_password:
             err = "Passwords do not match."
-            return jsonify({"error": err}) if request.is_json else (flash(err, "danger") or render_template("register.html"))
+            return jsonify({"error": err}) if request.is_json else (
+                        flash(err, "danger") or render_template("register.html"))
 
         if db_user_helper.find_by_email(email):
             err = "A user with this email already exists."
-            return jsonify({"error": err}) if request.is_json else (flash(err, "danger") or render_template("register.html"))
+            return jsonify({"error": err}) if request.is_json else (
+                        flash(err, "danger") or render_template("register.html"))
 
         # Hash and create
         pwd_hash = hash_password(password)
-        
+
         # Call teammate's create method if it exists, otherwise use fallback insertion
         if hasattr(db_user_helper, "create_user"):
             new_user = db_user_helper.create_user(email=email, password_hash=pwd_hash, role=role, name=name)
@@ -147,7 +154,8 @@ def register():
             new_user = UserFallback.create_user(email=email, password_hash=pwd_hash, role=role, name=name)
 
         msg = "Registration successful! Please log in."
-        return jsonify({"message": msg}) if request.is_json else (flash(msg, "success") or redirect(url_for("auth.login_view")))
+        return jsonify({"message": msg}) if request.is_json else (
+                    flash(msg, "success") or redirect(url_for("auth.login_view")))
 
     return render_template("register.html")
 
@@ -166,7 +174,8 @@ def login_view():
 
         user, error = authenticate_user(email, password)
         if error:
-            return jsonify({"error": error}) if request.is_json else (flash(error, "danger") or render_template("index.html"))
+            return jsonify({"error": error}) if request.is_json else (
+                        flash(error, "danger") or render_template("index.html"))
 
         # Extract attributes dynamically (dicts or classes)
         if hasattr(user, "_id"):
@@ -197,7 +206,8 @@ def login_view():
         session["user_email"] = email_val
 
         msg = "Login successful!"
-        return jsonify({"message": msg}) if request.is_json else (flash(msg, "success") or redirect(url_for("dashboard_view")))
+        return jsonify({"message": msg}) if request.is_json else (
+                    flash(msg, "success") or redirect(url_for("pages.dashboard")))
 
     return render_template("index.html")
 
@@ -207,7 +217,8 @@ def logout_view():
     """Endpoint for user logout."""
     session.clear()
     msg = "You have been logged out."
-    return jsonify({"message": msg}) if request.is_json else (flash(msg, "info") or redirect(url_for("auth.login_view")))
+    return jsonify({"message": msg}) if request.is_json else (
+                flash(msg, "info") or redirect(url_for("auth.login_view")))
 
 
 @auth_bp.route("/api/auth/me", methods=["GET"])

@@ -1,87 +1,109 @@
 {% extends "base.html" %}
+{% block title %}Reports & Analytics — TransitOps{% endblock %}
+{% block page_title %}Reports & Analytics{% endblock %}
 
-{% block title %}Dashboard{% endblock %}
+{% block extra_head %}
+<style>
+  .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 900px) { .chart-grid { grid-template-columns: 1fr; } }
+  .chart-card { padding: 18px; }
+  .chart-card h3 {
+    font-family: var(--font-display);
+    font-size: .92rem;
+    font-weight: 500;
+    margin: 0 0 12px;
+  }
+  .chart-wrap { position: relative; height: 260px; }
+  .export-bar { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+  .export-btn {
+    font-family: var(--font-mono);
+    font-size: .74rem;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    border: 1px solid var(--line);
+    background: var(--paper-card);
+    color: var(--ink-soft);
+    border-radius: 999px;
+    padding: 7px 14px;
+  }
+  .export-btn:hover { border-color: var(--signal-amber); color: var(--ink); }
+</style>
+{% endblock %}
 
 {% block content %}
+<div class="export-bar">
+  <a class="export-btn" href="/api/reports/export/csv?type=operational-cost">Export Operational Cost CSV</a>
+  <a class="export-btn" href="/api/reports/export/csv?type=fuel-efficiency">Export Fuel Efficiency CSV</a>
+  <a class="export-btn" href="/api/reports/export/csv?type=vehicle-roi">Export ROI CSV</a>
+</div>
 
-<!-- ================= Breadcrumb ================= -->
+<div class="chart-grid">
+  <div class="card chart-card">
+    <h3>Fleet Status Distribution</h3>
+    <div class="chart-wrap"><canvas id="fleetUtilChart"></canvas></div>
+  </div>
+  <div class="card chart-card">
+    <h3>Fuel Efficiency by Vehicle (km/L)</h3>
+    <div class="chart-wrap"><canvas id="fuelEfficiencyChart"></canvas></div>
+  </div>
+  <div class="card chart-card">
+    <h3>Operational Cost per Vehicle</h3>
+    <div class="chart-wrap"><canvas id="opCostChart"></canvas></div>
+  </div>
+  <div class="card chart-card">
+    <h3>Vehicle ROI</h3>
+    <div class="chart-wrap"><canvas id="roiChart"></canvas></div>
+  </div>
+</div>
+{% endblock %}
 
-<nav class="breadcrumb" aria-label="Breadcrumb">
-    <span>Home</span>
-    <span aria-hidden="true">›</span>
-    <span class="current" aria-current="page">Dashboard</span>
-</nav>
+{% block extra_scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script>
+const amber = '#f0a63a';
+const good = '#2e8b74';
+const bad = '#c4483b';
+const neutral = '#5b6470';
 
-<!-- ================= Page Header ================= -->
+async function loadAnalytics() {
+  const fleetRes = await fetch('/api/reports/fleet-utilization', { headers: { Accept: 'application/json' } });
+  const fleet = await fleetRes.json();
 
-<section class="page-header">
+  new Chart(document.getElementById('fleetUtilChart'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Available', 'On Trip', 'In Shop', 'Retired'],
+      datasets: [{
+        data: [fleet.available_vehicles, fleet.vehicles_on_trip, fleet.vehicles_in_maintenance, fleet.retired_vehicles],
+        backgroundColor: [good, amber, bad, neutral]
+      }]
+    },
+    options: { plugins: { legend: { position: 'bottom' } } }
+  });
 
-    <div class="page-title">
+  const feRes = await fetch('/api/reports/fuel-efficiency', { headers: { Accept: 'application/json' } });
+  const vehicles = await feRes.json();
+  const labels = vehicles.map(v => v.registration_number);
 
-        <h1>Dashboard</h1>
+  new Chart(document.getElementById('fuelEfficiencyChart'), {
+    type: 'bar',
+    data: { labels, datasets: [{ label: 'km/L', data: vehicles.map(v => v.fuel_efficiency_km_per_liter || 0), backgroundColor: amber }] },
+    options: { plugins: { legend: { display: false } } }
+  });
 
-        <p>
-            Fleet overview and operational summary
-        </p>
+  new Chart(document.getElementById('opCostChart'), {
+    type: 'bar',
+    data: { labels, datasets: [{ label: 'Cost (₹)', data: vehicles.map(v => v.operational_cost), backgroundColor: neutral }] },
+    options: { plugins: { legend: { display: false } } }
+  });
 
-    </div>
+  new Chart(document.getElementById('roiChart'), {
+    type: 'bar',
+    data: { labels, datasets: [{ label: 'ROI', data: vehicles.map(v => v.vehicle_roi || 0), backgroundColor: good }] },
+    options: { plugins: { legend: { display: false } } }
+  });
+}
 
-    <div class="header-actions">
-
-        <!-- Export Button -->
-
-        <button
-            class="btn btn-outline"
-            id="exportBtn"
-            type="button">
-
-            <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2">
-
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-
-                <polyline points="7 10 12 15 17 10"></polyline>
-
-                <line x1="12" y1="15" x2="12" y2="3"></line>
-
-            </svg>
-
-            Export
-
-        </button>
-
-        <!-- Add Vehicle -->
-
-        <button
-            class="btn btn-primary"
-            id="addVehicleBtn"
-            type="button">
-
-            <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="#fff"
-                stroke-width="2.5">
-
-                <line x1="12" y1="5" x2="12" y2="19"></line>
-
-                <line x1="5" y1="12" x2="19" y2="12"></line>
-
-            </svg>
-
-            Add Vehicle
-
-        </button>
-
-    </div>
-
-</section>
-
+loadAnalytics();
+</script>
 {% endblock %}

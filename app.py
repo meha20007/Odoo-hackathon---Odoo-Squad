@@ -10,6 +10,7 @@ from routes.maintenance import maintenance_bp
 from routes.reports import reports_bp
 from routes.vehicle import vehicle_bp
 from routes.trip import trip_bp
+from routes.pages import pages_bp
 
 load_dotenv()
 
@@ -25,18 +26,13 @@ def create_app():
     app.register_blueprint(reports_bp)
     app.register_blueprint(vehicle_bp)
     app.register_blueprint(trip_bp)
+    app.register_blueprint(pages_bp)
 
     @app.route("/")
     def index():
         if "user_id" in session:
-            return redirect(url_for("dashboard_view"))
+            return redirect(url_for("pages.dashboard"))
         return redirect(url_for("auth.login_view"))
-
-    @app.route("/dashboard")
-    def dashboard_view():
-        if "user_id" not in session:
-            return redirect(url_for("auth.login_view"))
-        return jsonify({"message": "Dashboard placeholder. Connect frontend KPI widgets here."})
 
     @app.route("/api/health")
     def health():

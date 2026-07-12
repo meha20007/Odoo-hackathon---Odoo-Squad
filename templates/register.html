@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Create account — TransitOps</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --graphite: #1c2128;
+      --paper: #f4f5f3;
+      --paper-card: #ffffff;
+      --ink: #1c2128;
+      --ink-soft: #5b6470;
+      --signal-amber: #f0a63a;
+      --status-bad: #c4483b;
+      --status-good: #2e8b74;
+      --line: #e3e5e1;
+      --radius: 6px;
+      --font-display: 'Oswald', sans-serif;
+      --font-body: 'Inter', sans-serif;
+      --font-mono: 'IBM Plex Mono', monospace;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-body);
+      background: var(--paper);
+      color: var(--ink);
+      padding: 24px;
+    }
+    .form-card {
+      width: 100%;
+      max-width: 380px;
+      background: var(--paper-card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 32px;
+    }
+    .brand {
+      font-family: var(--font-display);
+      font-size: 1.1rem;
+      font-weight: 600;
+      letter-spacing: .04em;
+      margin-bottom: 20px;
+    }
+    .brand span { color: var(--signal-amber); }
+    h1 { font-family: var(--font-display); font-size: 1.25rem; font-weight: 500; margin: 0 0 4px; }
+    p.sub { color: var(--ink-soft); font-size: .86rem; margin: 0 0 22px; }
+    label {
+      font-family: var(--font-mono);
+      font-size: .7rem;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: var(--ink-soft);
+      display: block;
+      margin-bottom: 6px;
+    }
+    .field { margin-bottom: 14px; }
+    input, select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      font-family: var(--font-body);
+      font-size: .9rem;
+      background: var(--paper-card);
+      color: var(--ink);
+    }
+    input:focus, select:focus { outline: 2px solid var(--signal-amber); outline-offset: 1px; border-color: var(--signal-amber); }
+    button.submit {
+      width: 100%;
+      padding: 11px;
+      background: var(--graphite);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius);
+      font-family: var(--font-display);
+      font-size: .9rem;
+      letter-spacing: .03em;
+      cursor: pointer;
+      margin-top: 6px;
+    }
+    button.submit:hover { background: #2a303a; }
+    .form-footer { margin-top: 16px; font-size: .82rem; color: var(--ink-soft); text-align: center; }
+    .form-footer a { color: var(--signal-amber); font-weight: 600; }
+    .flash-stack { margin-bottom: 14px; }
+    .flash {
+      font-size: .8rem;
+      padding: 9px 12px;
+      border-radius: var(--radius);
+      border-left: 3px solid var(--ink-soft);
+      background: var(--paper);
+      border: 1px solid var(--line);
+      margin-bottom: 6px;
+    }
+    .flash-danger { border-left-color: var(--status-bad); }
+    .flash-success { border-left-color: var(--status-good); }
+  </style>
+</head>
+<body>
+  <div class="form-card">
+    <div class="brand">Transit<span>Ops</span></div>
+    <h1>Create your account</h1>
+    <p class="sub">You'll get access based on the role you select below.</p>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flash-stack">
+          {% for category, message in messages %}
+            <div class="flash flash-{{ category }}">{{ message }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <form method="POST" action="{{ url_for('auth.register') }}">
+      <div class="field">
+        <label for="name">Full name</label>
+        <input type="text" id="name" name="name" required>
+      </div>
+      <div class="field">
+        <label for="email">Email</label>
+        <input type="email" id="email" name="email" required>
+      </div>
+      <div class="field">
+        <label for="role">Role</label>
+        <select id="role" name="role" required>
+          <option value="Fleet Manager">Fleet Manager</option>
+          <option value="Dispatcher">Dispatcher</option>
+          <option value="Safety Officer">Safety Officer</option>
+          <option value="Financial Analyst">Financial Analyst</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" required>
+      </div>
+      <div class="field">
+        <label for="confirm_password">Confirm password</label>
+        <input type="password" id="confirm_password" name="confirm_password" required>
+      </div>
+      <button type="submit" class="submit">Create account</button>
+    </form>
+
+    <div class="form-footer">
+      Already have an account? <a href="{{ url_for('auth.login_view') }}">Sign in</a>
+    </div>
+  </div>
+</body>
+</html>

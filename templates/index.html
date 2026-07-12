@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sign in — TransitOps</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --graphite: #1c2128;
+      --paper: #f4f5f3;
+      --paper-card: #ffffff;
+      --ink: #1c2128;
+      --ink-soft: #5b6470;
+      --signal-amber: #f0a63a;
+      --status-bad: #c4483b;
+      --status-good: #2e8b74;
+      --line: #e3e5e1;
+      --radius: 6px;
+      --font-display: 'Oswald', sans-serif;
+      --font-body: 'Inter', sans-serif;
+      --font-mono: 'IBM Plex Mono', monospace;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      font-family: var(--font-body);
+      background: var(--paper);
+      color: var(--ink);
+    }
+    .panel-info {
+      flex: 1.1;
+      background: var(--graphite);
+      color: #cdd3da;
+      padding: 48px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .panel-info .brand {
+      font-family: var(--font-display);
+      font-size: 1.4rem;
+      font-weight: 600;
+      color: #fff;
+      letter-spacing: .04em;
+    }
+    .panel-info .brand span { color: var(--signal-amber); }
+    .panel-info .tagline {
+      font-family: var(--font-display);
+      font-size: 1.8rem;
+      font-weight: 500;
+      line-height: 1.25;
+      max-width: 420px;
+      color: #fff;
+    }
+    .board {
+      font-family: var(--font-mono);
+      font-size: .75rem;
+      letter-spacing: .04em;
+      color: #8b94a0;
+      border-top: 1px solid #363d47;
+      padding-top: 16px;
+    }
+    .board div { display: flex; justify-content: space-between; padding: 3px 0; }
+    .board .status-good { color: var(--status-good); }
+    .board .status-bad { color: var(--status-bad); }
+
+    .panel-form {
+      flex: .9;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .form-card { width: 100%; max-width: 340px; }
+    .form-card h1 {
+      font-family: var(--font-display);
+      font-size: 1.3rem;
+      font-weight: 500;
+      margin: 0 0 4px;
+    }
+    .form-card p.sub { color: var(--ink-soft); font-size: .88rem; margin: 0 0 24px; }
+    label {
+      font-family: var(--font-mono);
+      font-size: .7rem;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: var(--ink-soft);
+      display: block;
+      margin-bottom: 6px;
+    }
+    .field { margin-bottom: 16px; }
+    input[type="email"], input[type="password"], input[type="text"] {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      font-family: var(--font-body);
+      font-size: .92rem;
+      background: var(--paper-card);
+      color: var(--ink);
+    }
+    input:focus { outline: 2px solid var(--signal-amber); outline-offset: 1px; border-color: var(--signal-amber); }
+    button.submit {
+      width: 100%;
+      padding: 11px;
+      background: var(--graphite);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius);
+      font-family: var(--font-display);
+      font-size: .92rem;
+      letter-spacing: .03em;
+      cursor: pointer;
+      margin-top: 4px;
+    }
+    button.submit:hover { background: #2a303a; }
+    .form-footer { margin-top: 18px; font-size: .84rem; color: var(--ink-soft); }
+    .form-footer a { color: var(--signal-amber); font-weight: 600; }
+
+    .flash-stack { margin-bottom: 16px; }
+    .flash {
+      font-size: .82rem;
+      padding: 9px 12px;
+      border-radius: var(--radius);
+      border-left: 3px solid var(--ink-soft);
+      background: var(--paper-card);
+      border: 1px solid var(--line);
+      margin-bottom: 8px;
+    }
+    .flash-danger { border-left-color: var(--status-bad); }
+    .flash-success { border-left-color: var(--status-good); }
+    .flash-warning { border-left-color: var(--signal-amber); }
+
+    @media (max-width: 760px) {
+      .panel-info { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="panel-info">
+    <div class="brand">Transit<span>Ops</span></div>
+    <div>
+      <p class="tagline">One board for every vehicle, driver, and dispatch on the road.</p>
+    </div>
+    <div class="board">
+      <div><span>FLEET UTILIZATION</span><span class="status-good">LIVE</span></div>
+      <div><span>LICENSE COMPLIANCE</span><span class="status-good">MONITORED</span></div>
+      <div><span>DISPATCH VALIDATION</span><span class="status-good">ENFORCED</span></div>
+    </div>
+  </div>
+
+  <div class="panel-form">
+    <div class="form-card">
+      <h1>Sign in</h1>
+      <p class="sub">Access your fleet operations dashboard.</p>
+
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <div class="flash-stack">
+            {% for category, message in messages %}
+              <div class="flash flash-{{ category }}">{{ message }}</div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endwith %}
+
+      <form method="POST" action="{{ url_for('auth.login_view') }}">
+        <div class="field">
+          <label for="email">Email</label>
+          <input type="email" id="email" name="email" required autofocus>
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <input type="password" id="password" name="password" required>
+        </div>
+        <button type="submit" class="submit">Sign in</button>
+      </form>
+
+      <div class="form-footer">
+        New to TransitOps? <a href="{{ url_for('auth.register') }}">Create an account</a>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
