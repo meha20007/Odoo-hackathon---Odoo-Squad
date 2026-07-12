@@ -99,6 +99,8 @@
       <tr>
         <th>Name</th>
         <th>License number</th>
+         <th>Contact</th>
+        <th>Safety Score</th>
         <th>License expiry</th>
         <th>Status</th>
         <th></th>
@@ -124,11 +126,34 @@
           <label for="name">Full name</label>
           <input type="text" id="name" required>
         </div>
+
         <div class="field">
           <label for="license_number">License number</label>
           <input type="text" id="license_number" required>
         </div>
         <div class="field">
+
+            <div class="field">
+  <label for="contact_number">Contact Number</label>
+  <input
+    type="text"
+    id="contact_number"
+    maxlength="10"
+    pattern="[0-9]{10}"
+    required
+  >
+</div>
+
+<div class="field">
+  <label for="safety_score">Safety Score</label>
+  <input
+    type="number"
+    id="safety_score"
+    min="0"
+    max="100"
+    required
+  >
+</div>
           <label for="license_expiry">License expiry</label>
           <input type="date" id="license_expiry" required>
         </div>
@@ -185,6 +210,11 @@ function openModal(driver) {
   if (driver) {
     document.getElementById('name').value = driver.name || '';
     document.getElementById('license_number').value = driver.license_number || '';
+    document.getElementById('contact_number').value =
+    driver.contact_number || '';
+
+document.getElementById('safety_score').value =
+    driver.safety_score || '';
     document.getElementById('license_expiry').value = driver.license_expiry || '';
     document.getElementById('status').value = driver.status || 'Available';
   } else {
@@ -242,6 +272,8 @@ function rowHtml(d) {
   return `<tr>
     <td>${escapeHtml(d.name)}</td>
     <td>${escapeHtml(d.license_number)}</td>
+     <td>${escapeHtml(d.contact_number)}</td>
+    <td>${escapeHtml(d.safety_score)}</td>
     <td>${escapeHtml(d.license_expiry)}${expiredTag}</td>
     <td><span class="pill ${pill}">${escapeHtml(d.status)}</span></td>
     <td><div class="row-actions">${actions}</div></td>
@@ -268,6 +300,8 @@ form.addEventListener('submit', async (e) => {
   const payload = {
     name: document.getElementById('name').value.trim(),
     license_number: document.getElementById('license_number').value.trim(),
+     contact_number: document.getElementById('contact_number').value.trim(),
+    safety_score: Number(document.getElementById('safety_score').value),
     license_expiry: document.getElementById('license_expiry').value,
     status: document.getElementById('status').value,
   };
