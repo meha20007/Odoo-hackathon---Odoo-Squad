@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field
 from datetime import date
+from typing import Literal
 
 
 class FuelEntry(BaseModel):
@@ -9,7 +10,7 @@ class FuelEntry(BaseModel):
 
     fuel_station: str
 
-    fuel_type: str = "Diesel"
+    fuel_type: Literal["Diesel", "Petrol", "CNG", "Electric"] = "Diesel"
 
     quantity: float = Field(..., gt=0)
 
@@ -18,3 +19,5 @@ class FuelEntry(BaseModel):
     total_cost: float = Field(..., gt=0)
 
     fuel_date: date
+
+    odometer:float=Field(..., gt=0)

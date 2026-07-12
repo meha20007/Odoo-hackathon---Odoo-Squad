@@ -1,8 +1,7 @@
-fastapi[standard]
-uvicorn[standard]
+flask
+werkzeug
 
 # Database
-motor
 pymongo
 
 # Validation
@@ -11,11 +10,6 @@ email-validator
 
 # Templates & Forms
 jinja2
-python-multipart
 
 # Environment Variables
 python-dotenv
-
-# Authentication
-passlib[bcrypt]
-PyJWT

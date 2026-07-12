@@ -8,7 +8,8 @@ def FuelEntry(item) -> dict:
         "quantity": float(item["quantity"]),
         "cost_per_liter": float(item["cost_per_liter"]),
         "total_cost": float(item["total_cost"]),
-        "fuel_date": item["fuel_date"]
+        "fuel_date": item["fuel_date"],
+        "odometer": item["odometer"]
     }
 
 
