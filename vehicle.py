@@ -34,6 +34,21 @@ for model_path in ["database.models", "models", "models.vehicle"]:
     except (ImportError, AttributeError):
         continue
 
+# Valid vehicle types (matches schemas/vehicles.py Literal options)
+VALID_VEHICLE_TYPES = ["Truck", "Van", "Mini Truck", "Pickup", "Bus", "Other"]
+
+# Valid statuses (matches schemas/vehicles.py Literal options)
+VALID_STATUSES = ["Available", "On Trip", "In Shop", "Retired"]
+
+# Mapping from old internal status values to the new shared schema values,
+# kept only so existing data/status transitions still make sense.
+STATUS_MAP = {
+    "active": "Available",
+    "maintenance": "In Shop",
+    "inactive": "Retired"
+}
+
+
 # Fallback helper class representing the expected interface
 class VehicleFallback:
     @staticmethod
@@ -51,18 +66,25 @@ class VehicleFallback:
 
     @staticmethod
     def find_by_plate(plate):
-        return db.vehicles.find_one({"license_plate": plate.strip().upper()})
+        return db.vehicles.find_one({"registration_number": plate.strip().upper()})
 
     @staticmethod
-    def create(make, model, year, license_plate, capacity, status="active"):
+    def create(make, model, license_plate, vehicle_type, max_load_capacity,
+               year=None, odometer=0.0, acquisition_cost=0.0, status="Available"):
         vehicle_data = {
             "make": make.strip(),
             "model": model.strip(),
-            "year": int(year),
-            "license_plate": license_plate.strip().upper(),
-            "capacity": int(capacity),
+            "vehicle_name": f"{make.strip()} {model.strip()}",
+            "vehicle_type": vehicle_type,
+            "registration_number": license_plate.strip().upper(),
+            "max_load_capacity": float(max_load_capacity),
+            "odometer": float(odometer),
+            "acquisition_cost": float(acquisition_cost),
             "status": status
         }
+        if year is not None:
+            vehicle_data["year"] = int(year)
+
         result = db.vehicles.insert_one(vehicle_data)
         vehicle_data["_id"] = result.inserted_id
         return vehicle_data
@@ -75,11 +97,23 @@ class VehicleFallback:
             # Ensure proper types
             if "year" in update_data:
                 update_data["year"] = int(update_data["year"])
-            if "capacity" in update_data:
-                update_data["capacity"] = int(update_data["capacity"])
-            if "license_plate" in update_data:
-                update_data["license_plate"] = update_data["license_plate"].strip().upper()
-            
+            if "max_load_capacity" in update_data:
+                update_data["max_load_capacity"] = float(update_data["max_load_capacity"])
+            if "odometer" in update_data:
+                update_data["odometer"] = float(update_data["odometer"])
+            if "acquisition_cost" in update_data:
+                update_data["acquisition_cost"] = float(update_data["acquisition_cost"])
+            if "registration_number" in update_data:
+                update_data["registration_number"] = update_data["registration_number"].strip().upper()
+            # Keep vehicle_name in sync if make/model changes
+            if "make" in update_data or "model" in update_data:
+                current = db.vehicles.find_one({"_id": vehicle_id}) or {}
+                new_make = update_data.get("make", current.get("make", "")).strip()
+                new_model = update_data.get("model", current.get("model", "")).strip()
+                update_data["make"] = new_make
+                update_data["model"] = new_model
+                update_data["vehicle_name"] = f"{new_make} {new_model}"
+
             result = db.vehicles.update_one({"_id": vehicle_id}, {"$set": update_data})
             return result.modified_count > 0
         except Exception:
@@ -111,9 +145,12 @@ def validate_vehicle_data(data, is_update=False):
     make = data.get("make")
     model = data.get("model")
     year = data.get("year")
-    license_plate = data.get("license_plate")
-    capacity = data.get("capacity")
-    status = data.get("status", "active")
+    license_plate = data.get("registration_number")
+    vehicle_type = data.get("vehicle_type")
+    max_load_capacity = data.get("max_load_capacity")
+    odometer = data.get("odometer")
+    acquisition_cost = data.get("acquisition_cost")
+    status = data.get("status", "Available")
 
     # If it's update, only validate provided fields
     if not is_update or make is not None:
@@ -128,7 +165,7 @@ def validate_vehicle_data(data, is_update=False):
         else:
             validated["model"] = model.strip()
 
-    if not is_update or year is not None:
+    if year is not None:
         try:
             year_val = int(year)
             if year_val < 1900 or year_val > 2100:
@@ -140,29 +177,61 @@ def validate_vehicle_data(data, is_update=False):
 
     if not is_update or license_plate is not None:
         if not license_plate or not isinstance(license_plate, str):
-            errors.append("License plate is required.")
+            errors.append("Registration number is required.")
         else:
             plate_clean = license_plate.strip().upper()
-            # Standard license plate format validation: alphanumeric 4-10 characters
-            if not re.match(r"^[A-Z0-9\-]{4,10}$", plate_clean):
-                errors.append("License plate must be 4 to 10 alphanumeric characters (hyphens allowed).")
+            # Standard registration number format validation: alphanumeric 5-20 characters
+            if not re.match(r"^[A-Z0-9\-]{5,20}$", plate_clean):
+                errors.append("Registration number must be 5 to 20 alphanumeric characters (hyphens allowed).")
             else:
                 validated["license_plate"] = plate_clean
 
-    if not is_update or capacity is not None:
+    if not is_update or vehicle_type is not None:
+        if vehicle_type not in VALID_VEHICLE_TYPES:
+            errors.append(f"Vehicle type must be one of {VALID_VEHICLE_TYPES}")
+        else:
+            validated["vehicle_type"] = vehicle_type
+
+    if not is_update or max_load_capacity is not None:
         try:
-            cap_val = int(capacity)
-            if cap_val <= 0 or cap_val > 150:
-                errors.append("Passenger capacity must be between 1 and 150.")
+            cap_val = float(max_load_capacity)
+            if cap_val <= 0:
+                errors.append("Max load capacity must be greater than 0.")
             else:
-                validated["capacity"] = cap_val
+                validated["max_load_capacity"] = cap_val
         except (ValueError, TypeError):
-            errors.append("Capacity must be a valid integer.")
+            errors.append("Max load capacity must be a valid number.")
+
+    if odometer is not None:
+        try:
+            odo_val = float(odometer)
+            if odo_val < 0:
+                errors.append("Odometer cannot be negative.")
+            else:
+                validated["odometer"] = odo_val
+        except (ValueError, TypeError):
+            errors.append("Odometer must be a valid number.")
+    elif not is_update:
+        validated["odometer"] = 0.0
+
+    if acquisition_cost is not None:
+        try:
+            cost_val = float(acquisition_cost)
+            if cost_val < 0:
+                errors.append("Acquisition cost cannot be negative.")
+            else:
+                validated["acquisition_cost"] = cost_val
+        except (ValueError, TypeError):
+            errors.append("Acquisition cost must be a valid number.")
+    elif not is_update:
+        validated["acquisition_cost"] = 0.0
 
     if status is not None:
-        valid_statuses = ["active", "maintenance", "inactive"]
-        if status not in valid_statuses:
-            errors.append(f"Status must be one of {valid_statuses}")
+        # Accept legacy status values too, and translate them
+        if status in STATUS_MAP:
+            status = STATUS_MAP[status]
+        if status not in VALID_STATUSES:
+            errors.append(f"Status must be one of {VALID_STATUSES}")
         else:
             validated["status"] = status
 
@@ -205,18 +274,21 @@ def add_vehicle():
     if error:
         return jsonify({"error": error}), 400
 
-    # Ensure unique plate
+    # Ensure unique registration number
     existing = db_vehicle_helper.find_by_plate(validated_data["license_plate"])
     if existing:
-        return jsonify({"error": "A vehicle with this license plate already exists."}), 400
+        return jsonify({"error": "A vehicle with this registration number already exists."}), 400
 
     vehicle = db_vehicle_helper.create(
         make=validated_data["make"],
         model=validated_data["model"],
-        year=validated_data["year"],
         license_plate=validated_data["license_plate"],
-        capacity=validated_data["capacity"],
-        status=validated_data.get("status", "active")
+        vehicle_type=validated_data["vehicle_type"],
+        max_load_capacity=validated_data["max_load_capacity"],
+        year=validated_data.get("year"),
+        odometer=validated_data.get("odometer", 0.0),
+        acquisition_cost=validated_data.get("acquisition_cost", 0.0),
+        status=validated_data.get("status", "Available")
     )
     vehicle["_id"] = str(vehicle["_id"])
     return jsonify({"message": "Vehicle created successfully.", "vehicle": vehicle}), 201
@@ -238,7 +310,9 @@ def update_vehicle(vehicle_id):
     if "license_plate" in validated_data:
         existing = db_vehicle_helper.find_by_plate(validated_data["license_plate"])
         if existing and str(existing["_id"]) != str(vehicle_id):
-            return jsonify({"error": "Another vehicle already has this license plate."}), 400
+            return jsonify({"error": "Another vehicle already has this registration number."}), 400
+        # rename key to match stored field
+        validated_data["registration_number"] = validated_data.pop("license_plate")
 
     success = db_vehicle_helper.update(vehicle_id, validated_data)
     if not success:
