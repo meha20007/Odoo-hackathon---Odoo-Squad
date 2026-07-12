@@ -99,6 +99,16 @@ def create_maintenance():
     if vehicle.get("status") == "Retired":
         return jsonify({"error": "Cannot create maintenance for a retired vehicle."}), 409
 
+    active_trip = db.trips.find_one({
+        "vehicle_id": vehicle_oid,
+        "status": "Dispatched"
+    })
+
+    if active_trip:
+        return jsonify({
+            "error": "Cannot create maintenance while the vehicle is dispatched."
+        }), 409
+
     document = serialize_dates(maintenance.model_dump())
     document["vehicle_id"] = vehicle_oid
 
@@ -141,6 +151,19 @@ def update_maintenance(maintenance_id):
     vehicle = db.vehicles.find_one({"_id": vehicle_oid})
     if not vehicle:
         return not_found("Vehicle")
+
+    if vehicle.get("status") == "Retired":
+        return jsonify({"error": "Cannot update maintenance for a retired vehicle."}), 409
+
+    active_trip = db.trips.find_one({
+        "vehicle_id": vehicle_oid,
+        "status": "Dispatched"
+    })
+
+    if active_trip:
+        return jsonify({
+            "error": "Cannot update maintenance while the vehicle is dispatched."
+        }), 409
 
     previous_status = existing.get("status")
     document = serialize_dates(maintenance.model_dump())

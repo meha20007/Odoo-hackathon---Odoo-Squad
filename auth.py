@@ -208,3 +208,41 @@ def logout_view():
     session.clear()
     msg = "You have been logged out."
     return jsonify({"message": msg}) if request.is_json else (flash(msg, "info") or redirect(url_for("auth.login_view")))
+
+
+@auth_bp.route("/api/auth/me", methods=["GET"])
+def current_user():
+    """Return the logged-in user for frontend clients (e.g. Lovable)."""
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"authenticated": False}), 401
+
+    user = db_user_helper.find_by_id(user_id)
+    if not user:
+        session.clear()
+        return jsonify({"authenticated": False, "error": "Session is invalid."}), 401
+
+    if isinstance(user, dict):
+        return jsonify(
+            {
+                "authenticated": True,
+                "user": {
+                    "id": str(user.get("_id")),
+                    "email": user.get("email"),
+                    "name": user.get("name", ""),
+                    "role": user.get("role", "user"),
+                },
+            }
+        )
+
+    return jsonify(
+        {
+            "authenticated": True,
+            "user": {
+                "id": str(getattr(user, "_id", user_id)),
+                "email": getattr(user, "email", ""),
+                "name": getattr(user, "name", ""),
+                "role": getattr(user, "role", "user"),
+            },
+        }
+    )
