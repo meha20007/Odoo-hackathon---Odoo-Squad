@@ -2,59 +2,29 @@ import os
 
 from dotenv import load_dotenv
 from flask import Flask, jsonify, redirect, session, url_for
-from flask_cors import CORS
 
 from auth import auth_bp
 from routes.drivers import drivers_bp
 from routes.fuel import fuel_bp
 from routes.maintenance import maintenance_bp
 from routes.reports import reports_bp
-from trip import trip_bp
-from vehicle import vehicle_bp
+from routes.vehicle import vehicle_bp
+from routes.trip import trip_bp
 
 load_dotenv()
-
-
-def _cors_origins():
-    defaults = [
-        "http://localhost:5173",
-        "http://localhost:3000",
-        "http://localhost:8080",
-        "http://localhost:8081",
-        "http://127.0.0.1:5173",
-        "http://127.0.0.1:3000",
-        "http://127.0.0.1:8080",
-        "http://127.0.0.1:8081",
-    ]
-    extra = os.environ.get("CORS_ALLOWED_ORIGINS", "")
-    if extra:
-        defaults.extend(origin.strip() for origin in extra.split(",") if origin.strip())
-    return defaults
 
 
 def create_app():
     app = Flask(__name__)
     app.secret_key = os.environ.get("SECRET_KEY", "transitops-dev-secret-change-in-production")
 
-    is_production = os.environ.get("FLASK_ENV") == "production"
-    app.config["SESSION_COOKIE_SAMESITE"] = "None" if is_production else "Lax"
-    app.config["SESSION_COOKIE_SECURE"] = is_production
-
-    CORS(
-        app,
-        origins=_cors_origins(),
-        supports_credentials=True,
-        allow_headers=["Content-Type", "Accept", "Authorization"],
-        methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    )
-
     app.register_blueprint(auth_bp)
     app.register_blueprint(drivers_bp)
     app.register_blueprint(maintenance_bp)
     app.register_blueprint(fuel_bp)
     app.register_blueprint(reports_bp)
-    app.register_blueprint(vehicle_bp, url_prefix="/api/vehicles")
-    app.register_blueprint(trip_bp, url_prefix="/api/trips")
+    app.register_blueprint(vehicle_bp)
+    app.register_blueprint(trip_bp)
 
     @app.route("/")
     def index():
