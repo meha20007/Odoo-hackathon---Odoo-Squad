@@ -1,4 +1,4 @@
-import { Link, useRouterState, Outlet } from "@tanstack/react-router";
+import { Link, useRouterState, Outlet, useNavigate } from "@tanstack/react-router";
 import {
   LayoutDashboard,
   Truck,
@@ -17,6 +17,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,6 +31,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
+import { useAuth } from "@/components/AuthGuard";
+import { authApi, initials } from "@/lib/transitops-api";
+import { toast } from "sonner";
 
 const nav = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -55,10 +59,25 @@ const crumbMap: Record<string, string> = {
 
 export function AppLayout() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { data: authData } = useAuth();
+  const user = authData?.user;
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const segments = pathname.split("/").filter(Boolean);
   const pageTitle = crumbMap[segments[0]] ?? "Dashboard";
+
+  async function handleLogout() {
+    try {
+      await authApi.logout();
+      queryClient.clear();
+      toast.success("Signed out successfully");
+      navigate({ to: "/auth" });
+    } catch {
+      toast.error("Could not sign out");
+    }
+  }
 
   return (
     <div className="flex min-h-screen w-full bg-secondary/60">
@@ -116,13 +135,13 @@ export function AppLayout() {
               </p>
             </div>
           )}
-          <Link
-            to="/auth"
-            className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-sidebar-foreground/80 transition hover:bg-sidebar-accent hover:text-white"
+          <button
+            onClick={handleLogout}
+            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-sidebar-foreground/80 transition hover:bg-sidebar-accent hover:text-white"
           >
             <LogOut className="h-[18px] w-[18px]" />
             {!collapsed && <span>Logout</span>}
-          </Link>
+          </button>
         </div>
       </aside>
 
@@ -189,12 +208,12 @@ export function AppLayout() {
                 <button className="flex items-center gap-2 rounded-xl px-1.5 py-1 transition hover:bg-secondary">
                   <Avatar className="h-9 w-9">
                     <AvatarFallback className="bg-primary text-primary-foreground text-xs font-semibold">
-                      AR
+                      {initials(user?.name || "User")}
                     </AvatarFallback>
                   </Avatar>
                   <div className="hidden text-left md:block">
-                    <div className="text-sm font-medium leading-tight">Arjun Rao</div>
-                    <div className="text-[11px] text-muted-foreground">Fleet Manager</div>
+                    <div className="text-sm font-medium leading-tight">{user?.name || "User"}</div>
+                    <div className="text-[11px] text-muted-foreground">{user?.role || "Member"}</div>
                   </div>
                   <ChevronDown className="hidden h-4 w-4 text-muted-foreground md:block" />
                 </button>
@@ -206,9 +225,7 @@ export function AppLayout() {
                 <DropdownMenuItem>Organization</DropdownMenuItem>
                 <DropdownMenuItem>Preferences</DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem asChild>
-                  <Link to="/auth">Sign out</Link>
-                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleLogout}>Sign out</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>

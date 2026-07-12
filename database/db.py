@@ -4,7 +4,7 @@ from pymongo import MongoClient
 
 load_dotenv()
 
-MONGO_URI = os.getenv("MONGO_URI")
+MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017/TransitOps")
 
 try:
     client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=2000)

@@ -266,7 +266,7 @@ def get_vehicle(vehicle_id):
 
 
 @vehicle_bp.route("", methods=["POST"])
-@role_required("admin")
+@role_required("Fleet Manager")
 def add_vehicle():
     """Creates a new vehicle (Admin only)."""
     data = request.get_json() or {}
@@ -295,7 +295,7 @@ def add_vehicle():
 
 
 @vehicle_bp.route("/<vehicle_id>", methods=["PUT"])
-@role_required("admin")
+@role_required("Fleet Manager")
 def update_vehicle(vehicle_id):
     """Updates an existing vehicle details (Admin only)."""
     vehicle = db_vehicle_helper.find_by_id(vehicle_id)
@@ -324,7 +324,7 @@ def update_vehicle(vehicle_id):
 
 
 @vehicle_bp.route("/<vehicle_id>", methods=["DELETE"])
-@role_required("admin")
+@role_required("Fleet Manager")
 def delete_vehicle(vehicle_id):
     """Deletes a vehicle from the system (Admin only)."""
     vehicle = db_vehicle_helper.find_by_id(vehicle_id)

@@ -1,25 +1,40 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageHeader, StatusPill } from "@/components/AppLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
-import { Wrench, Search, Plus, Calendar, MapPin, User, IndianRupee, Filter } from "lucide-react";
-import { maintenance } from "@/lib/mock-data";
+import { Wrench, Search, Plus, Calendar, IndianRupee, Filter } from "lucide-react";
+import { useMaintenance, useVehicles } from "@/hooks/use-api-data";
+import { formatCurrency } from "@/lib/transitops-api";
 
 export const Route = createFileRoute("/_app/maintenance")({
   component: MaintenancePage,
   head: () => ({ meta: [{ title: "Maintenance — TransitOps" }] }),
 });
 
-function statusPill(s: string) {
-  if (s === "overdue") return <StatusPill tone="danger">Overdue</StatusPill>;
-  if (s === "in-progress") return <StatusPill tone="warning">In progress</StatusPill>;
-  if (s === "completed") return <StatusPill tone="success">Completed</StatusPill>;
-  return <StatusPill tone="info">Scheduled</StatusPill>;
+function statusPill(status: string) {
+  if (status === "Pending") return <StatusPill tone="warning">Pending</StatusPill>;
+  if (status === "Completed") return <StatusPill tone="success">Completed</StatusPill>;
+  return <StatusPill tone="info">{status}</StatusPill>;
 }
 
 function MaintenancePage() {
+  const { data: maintenance = [], isLoading } = useMaintenance();
+  const { data: vehicles = [] } = useVehicles();
+  const vehicleMap = Object.fromEntries(vehicles.map((v) => [v._id, v.registration_number || v.vehicle_name]));
+
+  if (isLoading) {
+    return <div className="py-20 text-center text-muted-foreground">Loading maintenance records…</div>;
+  }
+
+  const stats = [
+    { label: "Pending", value: String(maintenance.filter((m) => m.status === "Pending").length), tone: "warning" as const },
+    { label: "Completed", value: String(maintenance.filter((m) => m.status === "Completed").length), tone: "success" as const },
+    { label: "Total Records", value: String(maintenance.length), tone: "info" as const },
+    { label: "Total Cost", value: formatCurrency(maintenance.reduce((s, m) => s + m.cost, 0)), tone: "primary" as const },
+  ];
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -29,12 +44,7 @@ function MaintenancePage() {
       />
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        {[
-          { label: "Scheduled", value: "18", tone: "info" as const },
-          { label: "In Progress", value: "6", tone: "warning" as const },
-          { label: "Overdue", value: "2", tone: "danger" as const },
-          { label: "Avg. Fleet Health", value: "84%", tone: "success" as const },
-        ].map((s) => (
+        {stats.map((s) => (
           <Card key={s.label} className="rounded-2xl shadow-soft">
             <CardContent className="p-5">
               <div className="text-xs text-muted-foreground">{s.label}</div>
@@ -50,62 +60,48 @@ function MaintenancePage() {
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative min-w-[240px] flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input placeholder="Search vehicle, workshop, mechanic…" className="h-10 rounded-xl bg-background pl-9" />
+          <Input placeholder="Search maintenance records…" className="h-10 rounded-xl bg-background pl-9" />
         </div>
-        <Button variant="outline" className="h-10 gap-1.5 rounded-xl"><Filter className="h-4 w-4" /> Filters</Button>
+        <Button variant="outline" className="h-10 gap-1.5 rounded-xl">
+          <Filter className="h-4 w-4" /> Filters
+        </Button>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2">
         {maintenance.map((m) => (
-          <Card key={m.id} className="rounded-2xl shadow-soft transition hover:shadow-elevated">
-            <CardHeader className="flex-row items-center justify-between space-y-0 pb-3">
-              <div className="flex items-center gap-3">
-                <div className="grid h-11 w-11 place-items-center rounded-xl bg-primary/10 text-primary">
-                  <Wrench className="h-5 w-5" />
+          <Card key={m.id} className="rounded-2xl shadow-soft">
+            <CardContent className="p-5">
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="grid h-10 w-10 place-items-center rounded-xl bg-primary/10 text-primary">
+                    <Wrench className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold">{m.maintenance_type}</h3>
+                    <p className="text-xs text-muted-foreground">{vehicleMap[m.vehicle_id] || m.vehicle_id.slice(-6)}</p>
+                  </div>
                 </div>
-                <div>
-                  <CardTitle className="text-[15px]">{m.service}</CardTitle>
-                  <p className="text-xs text-muted-foreground">{m.vehicle} · {m.id}</p>
+                {statusPill(m.status)}
+              </div>
+              <p className="mt-3 text-sm text-muted-foreground">{m.description}</p>
+              <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
+                <div className="flex items-center gap-2 rounded-lg bg-secondary/70 px-3 py-2">
+                  <Calendar className="h-3.5 w-3.5" /> {m.maintenance_date}
+                </div>
+                <div className="flex items-center gap-2 rounded-lg bg-secondary/70 px-3 py-2">
+                  <IndianRupee className="h-3.5 w-3.5" /> {formatCurrency(m.cost)}
                 </div>
               </div>
-              {statusPill(m.status)}
-            </CardHeader>
-            <CardContent className="space-y-3 pt-0">
-              <div className="grid gap-2 text-sm">
-                <Row icon={MapPin} label="Workshop" value={m.workshop} />
-                <Row icon={User} label="Mechanic" value={m.mechanic} />
-                <Row icon={Calendar} label="Scheduled" value={m.date} />
-                <Row icon={IndianRupee} label="Estimated cost" value={`₹${m.cost.toLocaleString("en-IN")}`} />
-              </div>
-              <div className="rounded-lg bg-secondary/60 p-2.5 text-xs">
-                <div className="font-medium">Parts</div>
-                <div className="text-muted-foreground">{m.parts}</div>
-              </div>
-              <div>
-                <div className="mb-1 flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground">Vehicle health</span>
-                  <span className="font-semibold">{m.health}%</span>
-                </div>
-                <Progress value={m.health} className="h-1.5" />
-              </div>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" className="flex-1 rounded-lg">View details</Button>
-                <Button size="sm" className="flex-1 rounded-lg">Update status</Button>
+              <div className="mt-4">
+                <Progress value={m.status === "Completed" ? 100 : 50} className="h-1.5" />
               </div>
             </CardContent>
           </Card>
         ))}
       </div>
-    </div>
-  );
-}
-
-function Row({ icon: Icon, label, value }: { icon: React.ComponentType<{ className?: string }>; label: string; value: string }) {
-  return (
-    <div className="flex items-center gap-2 text-xs">
-      <Icon className="h-3.5 w-3.5 text-muted-foreground" />
-      <span className="text-muted-foreground">{label}:</span>
-      <span className="ml-auto truncate font-medium">{value}</span>
+      {maintenance.length === 0 && (
+        <p className="text-center text-sm text-muted-foreground">No maintenance records found.</p>
+      )}
     </div>
   );
 }

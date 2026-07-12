@@ -1,18 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { PageHeader, StatusPill } from "@/components/AppLayout";
+import { PageHeader } from "@/components/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Search, Plus, MapPin, Navigation, Clock, Package, Route as RouteIcon, Filter } from "lucide-react";
-import { trips, drivers, vehicles } from "@/lib/mock-data";
+import { Search, Plus, MapPin, Navigation, Filter } from "lucide-react";
+import { useTrips, useDrivers, useVehicles } from "@/hooks/use-api-data";
 import { TripStatusPill } from "./dashboard";
 
 export const Route = createFileRoute("/_app/trips")({
@@ -21,6 +13,19 @@ export const Route = createFileRoute("/_app/trips")({
 });
 
 function TripsPage() {
+  const { data: trips = [], isLoading } = useTrips();
+  const { data: drivers = [] } = useDrivers();
+  const { data: vehicles = [] } = useVehicles();
+
+  const driverMap = Object.fromEntries(drivers.map((d) => [d.id, d.name]));
+  const vehicleMap = Object.fromEntries(vehicles.map((v) => [v._id, v.registration_number || v.vehicle_name]));
+
+  if (isLoading) {
+    return <div className="py-20 text-center text-muted-foreground">Loading trips…</div>;
+  }
+
+  const activeTrip = trips.find((t) => t.status === "ongoing");
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -30,48 +35,32 @@ function TripsPage() {
       />
 
       <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
-        {/* Map placeholder + trips table */}
         <div className="space-y-6">
           <Card className="overflow-hidden rounded-2xl shadow-soft">
             <div className="relative h-72 w-full bg-sidebar">
-              <div
-                className="absolute inset-0 opacity-20"
-                style={{
-                  backgroundImage:
-                    "linear-gradient(var(--color-primary) 1px, transparent 1px), linear-gradient(90deg, var(--color-primary) 1px, transparent 1px)",
-                  backgroundSize: "40px 40px",
-                }}
-              />
               <div className="absolute inset-0 bg-gradient-to-br from-sidebar via-sidebar/80 to-primary/20" />
-              {/* faux route */}
-              <svg className="absolute inset-0 h-full w-full" viewBox="0 0 800 300" preserveAspectRatio="none">
-                <path d="M60 240 Q 220 60 400 160 T 740 80" stroke="var(--color-primary)" strokeWidth="3" strokeDasharray="8 6" fill="none" strokeLinecap="round" />
-                <circle cx="60" cy="240" r="8" fill="var(--color-primary)" />
-                <circle cx="740" cy="80" r="8" fill="white" stroke="var(--color-primary)" strokeWidth="3" />
-              </svg>
               <div className="absolute left-6 top-6 flex items-center gap-2 rounded-full bg-white/95 px-3 py-1.5 text-xs font-medium shadow-soft">
-                <span className="h-2 w-2 animate-pulse rounded-full bg-success" /> 27 vehicles live
+                <span className="h-2 w-2 animate-pulse rounded-full bg-success" />
+                {trips.filter((t) => t.status === "ongoing").length} trips in progress
               </div>
-              <div className="absolute bottom-6 left-6 space-y-2">
-                <div className="flex items-center gap-2 rounded-xl bg-white/95 px-3 py-2 text-xs shadow-soft">
-                  <MapPin className="h-3.5 w-3.5 text-primary" />
-                  <div>
-                    <div className="font-semibold">Mumbai, MH</div>
-                    <div className="text-[10px] text-muted-foreground">Pickup</div>
+              {activeTrip && (
+                <div className="absolute bottom-6 left-6 space-y-2">
+                  <div className="flex items-center gap-2 rounded-xl bg-white/95 px-3 py-2 text-xs shadow-soft">
+                    <MapPin className="h-3.5 w-3.5 text-primary" />
+                    <div>
+                      <div className="font-semibold">{activeTrip.source}</div>
+                      <div className="text-[10px] text-muted-foreground">Pickup</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 rounded-xl bg-white/95 px-3 py-2 text-xs shadow-soft">
+                    <Navigation className="h-3.5 w-3.5 text-primary" />
+                    <div>
+                      <div className="font-semibold">{activeTrip.destination}</div>
+                      <div className="text-[10px] text-muted-foreground">Destination · {activeTrip.planned_distance} km</div>
+                    </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 rounded-xl bg-white/95 px-3 py-2 text-xs shadow-soft">
-                  <Navigation className="h-3.5 w-3.5 text-primary" />
-                  <div>
-                    <div className="font-semibold">Pune, MH</div>
-                    <div className="text-[10px] text-muted-foreground">Destination · 148 km</div>
-                  </div>
-                </div>
-              </div>
-              <div className="absolute right-6 top-6 rounded-xl bg-white/95 px-3 py-2 text-xs shadow-soft">
-                <div className="text-[10px] text-muted-foreground">ETA</div>
-                <div className="font-semibold">2h 15m</div>
-              </div>
+              )}
             </div>
           </Card>
 
@@ -79,7 +68,7 @@ function TripsPage() {
             <CardHeader className="flex-row items-center justify-between space-y-0">
               <div>
                 <CardTitle className="text-base">All Trips</CardTitle>
-                <p className="mt-0.5 text-xs text-muted-foreground">{trips.length} trips this week</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">{trips.length} trips total</p>
               </div>
               <div className="flex gap-2">
                 <div className="relative">
@@ -98,122 +87,65 @@ function TripsPage() {
                       <th className="px-4 py-3 text-left font-medium">Route</th>
                       <th className="px-4 py-3 text-left font-medium">Driver</th>
                       <th className="px-4 py-3 text-left font-medium">Distance</th>
-                      <th className="px-4 py-3 text-left font-medium">ETA</th>
+                      <th className="px-4 py-3 text-left font-medium">Revenue</th>
                       <th className="px-4 py-3 text-left font-medium">Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/70">
                     {trips.map((t) => (
-                      <tr key={t.id} className="transition hover:bg-secondary/30">
-                        <td className="px-6 py-3.5 font-medium">{t.id}</td>
+                      <tr key={t._id} className="transition hover:bg-secondary/30">
+                        <td className="px-6 py-3.5 font-medium">{t._id.slice(-6)}</td>
                         <td className="px-4 py-3.5">
-                          <div className="font-medium">{t.pickup}</div>
+                          <div className="font-medium">{t.source}</div>
                           <div className="text-xs text-muted-foreground">→ {t.destination}</div>
                         </td>
                         <td className="px-4 py-3.5">
-                          <div>{t.driver}</div>
-                          <div className="text-xs text-muted-foreground">{t.vehicle}</div>
+                          <div>{driverMap[t.driver_id] || "—"}</div>
+                          <div className="text-xs text-muted-foreground">{vehicleMap[t.vehicle_id] || "—"}</div>
                         </td>
-                        <td className="px-4 py-3.5">{t.distance} km</td>
-                        <td className="px-4 py-3.5 text-muted-foreground">{t.eta}</td>
+                        <td className="px-4 py-3.5">{t.planned_distance || 0} km</td>
+                        <td className="px-4 py-3.5">₹{(t.revenue || 0).toLocaleString("en-IN")}</td>
                         <td className="px-4 py-3.5"><TripStatusPill status={t.status} /></td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
+                {trips.length === 0 && (
+                  <p className="px-6 py-8 text-sm text-muted-foreground">No trips yet.</p>
+                )}
               </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Create trip form */}
         <Card className="rounded-2xl shadow-soft">
           <CardHeader>
-            <CardTitle className="text-base">Create Trip</CardTitle>
-            <p className="text-xs text-muted-foreground">Dispatch a new shipment in seconds</p>
+            <CardTitle className="text-base">Trip Summary</CardTitle>
+            <p className="text-xs text-muted-foreground">Fleet dispatch overview</p>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-3">
-              <FormField label="Pickup location" icon={MapPin}>
-                <Input placeholder="Mumbai, MH" className="pl-9" />
-              </FormField>
-              <FormField label="Destination" icon={Navigation}>
-                <Input placeholder="Pune, MH" className="pl-9" />
-              </FormField>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-muted-foreground">Scheduled at</label>
-                  <Input type="datetime-local" />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-muted-foreground">Distance</label>
-                  <Input placeholder="148 km" />
-                </div>
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-muted-foreground">Vehicle</label>
-                <Select>
-                  <SelectTrigger><SelectValue placeholder="Assign vehicle" /></SelectTrigger>
-                  <SelectContent>
-                    {vehicles.slice(0, 5).map((v) => (
-                      <SelectItem key={v.id} value={v.id}>{v.number} · {v.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-muted-foreground">Driver</label>
-                <Select>
-                  <SelectTrigger><SelectValue placeholder="Assign driver" /></SelectTrigger>
-                  <SelectContent>
-                    {drivers.slice(0, 5).map((d) => (
-                      <SelectItem key={d.id} value={d.id}>{d.name} · ★ {d.safetyRating}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <FormField label="Cargo notes" icon={Package}>
-                <Textarea placeholder="Electronics · 18 T · handle with care" className="pl-9" rows={3} />
-              </FormField>
+          <CardContent className="space-y-3 text-sm">
+            <div className="flex justify-between rounded-xl border p-3">
+              <span className="text-muted-foreground">Scheduled</span>
+              <span className="font-semibold">{trips.filter((t) => t.status === "scheduled").length}</span>
             </div>
-
-            <Button className="w-full rounded-xl gap-1.5">
-              <RouteIcon className="h-4 w-4" /> Dispatch Trip
-            </Button>
-
-            <div className="rounded-xl border border-dashed border-border p-3 text-xs">
-              <div className="mb-2 flex items-center gap-2 font-semibold text-primary">
-                <Clock className="h-3.5 w-3.5" /> Trip Timeline
-              </div>
-              <ol className="space-y-1.5 text-muted-foreground">
-                <li>• 09:20 — Trip created & dispatched</li>
-                <li>• 09:35 — Vehicle checked in at pickup</li>
-                <li>• 10:12 — En route to destination</li>
-                <li>• 12:30 — Estimated arrival (ETA)</li>
-              </ol>
+            <div className="flex justify-between rounded-xl border p-3">
+              <span className="text-muted-foreground">In Progress</span>
+              <span className="font-semibold">{trips.filter((t) => t.status === "ongoing").length}</span>
+            </div>
+            <div className="flex justify-between rounded-xl border p-3">
+              <span className="text-muted-foreground">Completed</span>
+              <span className="font-semibold">{trips.filter((t) => t.status === "completed").length}</span>
+            </div>
+            <div className="flex justify-between rounded-xl border p-3">
+              <span className="text-muted-foreground">Available Drivers</span>
+              <span className="font-semibold">{drivers.filter((d) => d.status === "Available").length}</span>
+            </div>
+            <div className="flex justify-between rounded-xl border p-3">
+              <span className="text-muted-foreground">Available Vehicles</span>
+              <span className="font-semibold">{vehicles.filter((v) => v.status === "Available").length}</span>
             </div>
           </CardContent>
         </Card>
-      </div>
-    </div>
-  );
-}
-
-function FormField({
-  label,
-  icon: Icon,
-  children,
-}: {
-  label: string;
-  icon: React.ComponentType<{ className?: string }>;
-  children: React.ReactNode;
-}) {
-  return (
-    <div>
-      <label className="mb-1 block text-xs font-medium text-muted-foreground">{label}</label>
-      <div className="relative">
-        <Icon className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-        {children}
       </div>
     </div>
   );

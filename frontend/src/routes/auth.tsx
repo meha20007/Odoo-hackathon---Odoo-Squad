@@ -1,5 +1,6 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Truck,
   Eye,
@@ -21,6 +22,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { ApiError } from "@/lib/api";
+import { authApi } from "@/lib/transitops-api";
 
 export const Route = createFileRoute("/auth")({
   component: AuthPage,
@@ -30,19 +33,67 @@ export const Route = createFileRoute("/auth")({
 });
 
 function AuthPage() {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [showPw, setShowPw] = useState(false);
   const [showCpw, setShowCpw] = useState(false);
-  const [role, setRole] = useState("manager");
+  const [role, setRole] = useState("Fleet Manager");
+  const [loading, setLoading] = useState(false);
+
+  async function handleLogin(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = new FormData(e.currentTarget);
+    const email = String(form.get("email") || "");
+    const password = String(form.get("password") || "");
+
+    setLoading(true);
+    try {
+      await authApi.login(email, password);
+      await queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
+      toast.success("Signed in — welcome to TransitOps");
+      navigate({ to: "/dashboard" });
+    } catch (error) {
+      const message = error instanceof ApiError ? error.message : "Login failed";
+      toast.error(message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleRegister(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = new FormData(e.currentTarget);
+    const firstName = String(form.get("firstName") || "");
+    const lastName = String(form.get("lastName") || "");
+    const email = String(form.get("email") || "");
+    const password = String(form.get("password") || "");
+    const confirmPassword = String(form.get("confirmPassword") || "");
+
+    setLoading(true);
+    try {
+      await authApi.register({
+        email,
+        password,
+        confirm_password: confirmPassword,
+        name: `${firstName} ${lastName}`.trim(),
+        role,
+      });
+      toast.success("Account created — please sign in");
+    } catch (error) {
+      const message = error instanceof ApiError ? error.message : "Registration failed";
+      toast.error(message);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
     <div className="grid min-h-screen w-full lg:grid-cols-[1.05fr_1fr]">
-      {/* Left — illustration */}
       <div className="relative hidden overflow-hidden bg-sidebar text-white lg:block">
         <div
           className="absolute inset-0 opacity-[0.07]"
           style={{
-            backgroundImage:
-              "radial-gradient(circle at 1px 1px, white 1px, transparent 0)",
+            backgroundImage: "radial-gradient(circle at 1px 1px, white 1px, transparent 0)",
             backgroundSize: "22px 22px",
           }}
         />
@@ -63,14 +114,14 @@ function AuthPage() {
           <div className="max-w-lg">
             <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-medium backdrop-blur">
               <Sparkles className="h-3.5 w-3.5 text-primary" />
-              AI-powered fleet operations
+              Connected to Flask API
             </div>
             <h1 className="text-4xl font-semibold leading-[1.1] tracking-tight xl:text-5xl">
               Run your fleet like the top 1% of logistics operators.
             </h1>
             <p className="mt-5 text-[15px] leading-relaxed text-white/70">
               Dispatch trips, monitor drivers, schedule maintenance, and track every liter
-              of fuel — from a single command center trusted by modern logistics teams.
+              of fuel — from a single command center.
             </p>
 
             <div className="mt-10 grid grid-cols-2 gap-3">
@@ -93,15 +144,12 @@ function AuthPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-6 text-xs text-white/50">
-            <span>© 2026 TransitOps Inc.</span>
-            <span>SOC 2 · ISO 27001</span>
-            <span>99.99% uptime</span>
+          <div className="text-xs text-white/50">
+            Demo: fleet@transitops.io / password123
           </div>
         </div>
       </div>
 
-      {/* Right — auth card */}
       <div className="flex items-center justify-center bg-background px-6 py-12 sm:px-10">
         <div className="w-full max-w-md">
           <div className="mb-8 flex items-center gap-3 lg:hidden">
@@ -125,21 +173,23 @@ function AuthPage() {
                 </p>
               </div>
 
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  toast.success("Signed in — welcome to TransitOps");
-                }}
-                className="space-y-4"
-              >
+              <form onSubmit={handleLogin} className="space-y-4">
                 <Field label="Work email" icon={Mail}>
-                  <Input type="email" placeholder="you@company.com" defaultValue="arjun@transitops.io" className="h-11 pl-10" required />
+                  <Input
+                    name="email"
+                    type="email"
+                    placeholder="fleet@transitops.io"
+                    defaultValue="fleet@transitops.io"
+                    className="h-11 pl-10"
+                    required
+                  />
                 </Field>
                 <Field label="Password" icon={Lock}>
                   <Input
+                    name="password"
                     type={showPw ? "text" : "password"}
                     placeholder="••••••••"
-                    defaultValue="password"
+                    defaultValue="password123"
                     className="h-11 pl-10 pr-10"
                     required
                   />
@@ -156,20 +206,16 @@ function AuthPage() {
                   <label className="flex items-center gap-2">
                     <Checkbox defaultChecked /> Remember me
                   </label>
-                  <button type="button" className="font-medium text-primary hover:underline">
-                    Forgot password?
-                  </button>
                 </div>
 
-                <Button asChild size="lg" className="h-11 w-full rounded-xl text-[15px] font-semibold">
-                  <Link to="/dashboard">
-                    Sign in <ArrowRight className="ml-1 h-4 w-4" />
-                  </Link>
+                <Button
+                  type="submit"
+                  size="lg"
+                  disabled={loading}
+                  className="h-11 w-full rounded-xl text-[15px] font-semibold"
+                >
+                  {loading ? "Signing in…" : "Sign in"} <ArrowRight className="ml-1 h-4 w-4" />
                 </Button>
-
-                <p className="text-center text-xs text-muted-foreground">
-                  Protected by enterprise-grade encryption · SSO ready
-                </p>
               </form>
             </TabsContent>
 
@@ -181,28 +227,23 @@ function AuthPage() {
                 </p>
               </div>
 
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  toast.success("Account created — check your inbox to verify");
-                }}
-                className="space-y-4"
-              >
+              <form onSubmit={handleRegister} className="space-y-4">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <Label className="mb-1.5 block text-xs font-medium">First name</Label>
-                    <Input className="h-11" placeholder="Arjun" required />
+                    <Input name="firstName" className="h-11" placeholder="Arjun" required />
                   </div>
                   <div>
                     <Label className="mb-1.5 block text-xs font-medium">Last name</Label>
-                    <Input className="h-11" placeholder="Rao" required />
+                    <Input name="lastName" className="h-11" placeholder="Rao" required />
                   </div>
                 </div>
                 <Field label="Work email" icon={Mail}>
-                  <Input type="email" placeholder="you@company.com" className="h-11 pl-10" required />
+                  <Input name="email" type="email" placeholder="you@company.com" className="h-11 pl-10" required />
                 </Field>
                 <Field label="Password" icon={Lock}>
                   <Input
+                    name="password"
                     type={showPw ? "text" : "password"}
                     placeholder="Minimum 8 characters"
                     className="h-11 pl-10 pr-10"
@@ -215,6 +256,7 @@ function AuthPage() {
                 </Field>
                 <Field label="Confirm password" icon={Lock}>
                   <Input
+                    name="confirmPassword"
                     type={showCpw ? "text" : "password"}
                     placeholder="Re-enter password"
                     className="h-11 pl-10 pr-10"
@@ -227,11 +269,12 @@ function AuthPage() {
 
                 <div>
                   <Label className="mb-2 block text-xs font-medium">Select your role</Label>
-                  <RadioGroup value={role} onValueChange={setRole} className="grid grid-cols-3 gap-2">
+                  <RadioGroup value={role} onValueChange={setRole} className="grid grid-cols-2 gap-2">
                     {[
-                      { v: "admin", label: "Admin" },
-                      { v: "manager", label: "Fleet Manager" },
-                      { v: "driver", label: "Driver" },
+                      { v: "Fleet Manager", label: "Fleet Manager" },
+                      { v: "Dispatcher", label: "Dispatcher" },
+                      { v: "Financial Analyst", label: "Financial Analyst" },
+                      { v: "Safety Officer", label: "Safety Officer" },
                     ].map((r) => (
                       <label
                         key={r.v}
@@ -249,14 +292,13 @@ function AuthPage() {
                   </RadioGroup>
                 </div>
 
-                <label className="flex items-start gap-2 text-xs text-muted-foreground">
-                  <Checkbox className="mt-0.5" required />
-                  I agree to the <a className="text-primary hover:underline">Terms</a> and{" "}
-                  <a className="text-primary hover:underline">Privacy Policy</a>.
-                </label>
-
-                <Button asChild size="lg" className="h-11 w-full rounded-xl text-[15px] font-semibold">
-                  <Link to="/dashboard">Create account</Link>
+                <Button
+                  type="submit"
+                  size="lg"
+                  disabled={loading}
+                  className="h-11 w-full rounded-xl text-[15px] font-semibold"
+                >
+                  {loading ? "Creating account…" : "Create account"}
                 </Button>
               </form>
             </TabsContent>
